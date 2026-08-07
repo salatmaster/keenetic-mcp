@@ -230,8 +230,14 @@ export interface SegmentState {
    * `iseg` is computed by the router, not written by us: it stays empty for a
    * bridge that carries an address but no VLAN, which is exactly the network
    * that works over Wi-Fi and never appears under /access-points.
+   *
+   * Bridge0 is the exception and is always listed. Its `iseg` is empty too,
+   * because the home network is the untagged one rather than a VLAN, so the
+   * test that identifies every other invisible bridge would libel this one.
    */
   uiVisible: boolean;
+  /** True for the home segment, which is why its empty `iseg` means nothing. */
+  home: boolean;
 }
 
 export async function readSegment(rci: Rci, bridge: string): Promise<SegmentState | null> {
@@ -242,9 +248,11 @@ export async function readSegment(rci: Rci, bridge: string): Promise<SegmentStat
   const vlanId = typeof iseg['vlan'] === 'string' ? iseg['vlan'] : null;
   const vlanPorts = typeof iseg['vlan-port'] === 'string' ? iseg['vlan-port'] : null;
   const address = asRecord(asRecord(raw['ip'])['address'])['address'];
+  const home = bridge === HOME_BRIDGE;
 
   return {
     bridge,
+    home,
     description: typeof raw['description'] === 'string' ? raw['description'] : null,
     address: typeof address === 'string' ? address : null,
     include: toArray(raw['include'])
@@ -253,7 +261,7 @@ export async function readSegment(rci: Rci, bridge: string): Promise<SegmentStat
     vlanId,
     ports: typeof iseg['port'] === 'string' ? iseg['port'] : null,
     vlanPorts,
-    uiVisible: (vlanId ?? '') !== '' && (vlanPorts ?? '') !== ''
+    uiVisible: home || ((vlanId ?? '') !== '' && (vlanPorts ?? '') !== '')
   };
 }
 

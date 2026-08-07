@@ -182,6 +182,32 @@ rci_call { "method": "GET", "path": "show/rc/interface/Bridge2" }
 list it. Empty means you have built the invisible version. `include` should hold
 the VLAN and, if Wi-Fi was configured, one access point per radio.
 
+Two exceptions to that test, both measured rather than assumed:
+
+**Bridge0 has an empty `iseg` and is listed anyway.** The home network is the
+untagged one rather than a VLAN, so the check that identifies every other
+invisible bridge would libel this one. `list_segments` reports it as `home`.
+
+**A segment with no Wi-Fi will not appear under `/access-points`.** That page is
+"My networks and Wi-Fi": it lists Wi-Fi networks, so a wired-only segment has
+nothing to show there. It still appears in the segment list. If the user says
+they cannot see it, ask which page they are looking at before assuming the
+segment is broken - the two access-point lines only enter `include` when
+`mws wlan` binds to the bridge:
+
+```
+interface Bridge1                  interface Bridge2
+    description guest                  description wired-only
+    include GigabitEthernet0/Vlan2     include GigabitEthernet0/Vlan3
+    include WifiMaster1/AccessPoint1
+    include WifiMaster0/AccessPoint1
+    security-level protected           security-level protected
+```
+
+Both are segments. Only the first is on `/access-points`.
+
+The name shown is the `description`, not the bridge.
+
 ## Tearing one down
 
 Removing the bridge is not enough. The VLAN stays trunked over every port of the
@@ -220,5 +246,14 @@ before any of this.
 
 ## Confirmed on
 
-Keenetic Ultra (KN-1811), KeeneticOS 5.1.3, five switch ports. The shape is not
-model-specific, but the port count is: read them rather than assuming five.
+Keenetic Ultra (KN-1811), KeeneticOS 5.1.3, five switch ports, by building a
+segment and tearing it down again.
+
+Worth knowing from that run: `switchport trunk vlan` really is additive. The
+ports went from `access=1 trunk=[2]` to `access=1 trunk=[2,3]` and back, so
+neither the home network nor the existing guest segment on those ports noticed.
+The two access points appeared in `include` on their own when `mws wlan` bound
+to the bridge, and the teardown left no subinterface, pool or Wi-Fi entry.
+
+The shape is not model-specific, but the port count is: read the ports rather
+than assuming five.

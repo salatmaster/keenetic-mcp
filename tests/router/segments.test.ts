@@ -122,6 +122,24 @@ describe('readSegment', () => {
     expect(state?.uiVisible, 'and still not a segment').toBe(false);
   });
 
+  /**
+   * Measured on a live 5.1.3: Bridge0 carries an address and an empty `iseg`,
+   * because the home network is the untagged one rather than a VLAN. The test
+   * that catches every other invisible bridge would call this one invisible.
+   */
+  it('does not call the home segment invisible for having no VLAN', async () => {
+    const rci = rciWith({
+      'show/rc/interface/Bridge0': {
+        ip: { address: { address: '192.168.1.1' } },
+        iseg: { vlan: '', 'vlan-port': '' }
+      }
+    });
+
+    const state = await readSegment(rci, 'Bridge0');
+    expect(state?.home).toBe(true);
+    expect(state?.uiVisible).toBe(true);
+  });
+
   it('returns null for a bridge that does not exist', async () => {
     await expect(readSegment(rciWith({}), 'Bridge7')).resolves.toBeNull();
   });

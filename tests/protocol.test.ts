@@ -20,10 +20,17 @@ const READ_TOOLS = [
   'list_devices',
   'list_interfaces',
   'list_policies',
-  'list_routes'
+  'list_routes',
+  'list_segments'
 ];
 
-const WRITE_TOOLS = ['update_device', 'set_interface_state', 'save_config'];
+const WRITE_TOOLS = [
+  'update_device',
+  'set_interface_state',
+  'save_config',
+  'create_segment',
+  'delete_segment'
+];
 
 function context(readOnly: boolean): ToolContext {
   const client = {

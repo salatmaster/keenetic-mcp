@@ -16,8 +16,24 @@ const REAL_MAC = /\b(?!02:)[0-9a-f]{2}(:[0-9a-f]{2}){5}\b/gi;
 const ALLOWED_MACS = new Set(['aa:bb:cc:dd:ee:ff', '11:22:33:44:55:66']);
 // 192.168.1.1 is the documented example host and the most common router address
 // in existence, so it is allowed; any other private address is not.
+//
+// The segment documentation needs a second and third subnet to show one being
+// created next to the home one. Those are listed individually rather than as a
+// range, the same way the MACs below are: a gateway .1 and a pool boundary
+// identify nobody, while a client address out of a real router - the kind that
+// leaked here once - stays detectable. Writing one into this comment to explain
+// that is itself caught, which is the behaviour working.
 const PRIVATE_IP = /\b(10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+)\b/g;
-const ALLOWED_IPS = new Set(['192.168.1.1', '10.0.0.42']);
+const ALLOWED_IPS = new Set([
+  '192.168.1.1',
+  '10.0.0.42',
+  '192.168.1.50',
+  '192.168.2.1',
+  '192.168.2.50',
+  '192.168.3.1',
+  '192.168.3.33',
+  '192.168.3.152'
+]);
 const BASE64_KEY = /\b[A-Za-z0-9+/]{40,}={0,2}\b/;
 
 async function* walk(dir: URL): AsyncGenerator<URL> {

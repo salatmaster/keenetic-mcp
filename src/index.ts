@@ -15,6 +15,7 @@ import { registerInterfaceTools } from './tools/interfaces.js';
 import { registerNetworkTools } from './tools/network.js';
 import { registerRawTool } from './tools/raw.js';
 import type { ToolContext } from './tools/registry.js';
+import { registerSegmentTools } from './tools/segments.js';
 import { registerSystemTools } from './tools/system.js';
 import { loadLocalEnv, resolveVersion } from './version.js';
 
@@ -24,6 +25,7 @@ export function createServer(ctx: ToolContext): McpServer {
   registerDeviceTools(server, ctx);
   registerInterfaceTools(server, ctx);
   registerNetworkTools(server, ctx);
+  registerSegmentTools(server, ctx);
   registerConfigTools(server, ctx);
   registerRawTool(server, ctx);
   return server;

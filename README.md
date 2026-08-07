@@ -108,6 +108,7 @@ Prefer environment variables? `KEENETIC_HOST`, `KEENETIC_USER` and
 | `list_policies` | connection policies for selective routing |
 | `get_system_info` | model, firmware, CPU, memory, installed components |
 | `get_config_state` | unsaved changes, who changed what and when |
+| `list_segments` | every bridge, and whether the web interface lists it as a segment |
 | `backup_config` | download the configuration to a local file |
 
 **Change**
@@ -116,6 +117,8 @@ Prefer environment variables? `KEENETIC_HOST`, `KEENETIC_USER` and
 |---|---|
 | `update_device` | rename, block or allow, assign a routing policy, schedule or priority |
 | `set_interface_state` | bring an interface up or down |
+| `create_segment` | a guest or IoT network the web interface actually lists, with Wi-Fi, DHCP and optional VPN routing |
+| `delete_segment` | remove a segment and everything created with it |
 | `save_config` | make pending changes survive a reboot |
 
 **Escape hatch**
@@ -126,7 +129,7 @@ Prefer environment variables? `KEENETIC_HOST`, `KEENETIC_USER` and
 
 ## Skills included
 
-The plugin ships three skills, so the agent knows how your router behaves rather
+The plugin ships four skills, so the agent knows how your router behaves rather
 than guessing. One plugin directory serves both Claude Code and Codex: they read
 different manifests but share the same skills and the same server definition.
 
@@ -136,6 +139,10 @@ different manifests but share the same skills and the same server definition.
 - **keenetic-safe-changes** teaches the change workflow: what the router's
   fail-safe does and does not protect against, and which interfaces will cut off
   your own access.
+- **keenetic-segments** covers building an isolated network the router will
+  admit exists. The obvious way produces a guest network that carries traffic
+  perfectly and never appears in the web interface, because a segment is
+  VLAN-backed and the VLAN is the part everyone leaves out.
 - **keenetic-troubleshoot** is an ordered diagnostic playbook for "the internet
   is down", "Wi-Fi is bad" and "one device cannot connect".
 

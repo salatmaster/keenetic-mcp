@@ -4,12 +4,14 @@ import { McpServer } from '@modelcontextprotocol/server';
 import { StdioServerTransport } from '@modelcontextprotocol/server/stdio';
 import { loadConfig } from './config/load.js';
 import { createClient } from './router/client.js';
+import { registerDeviceTools } from './tools/devices.js';
 import type { ToolContext } from './tools/registry.js';
 import { registerSystemTools } from './tools/system.js';
 
 export function createServer(ctx: ToolContext): McpServer {
   const server = new McpServer({ name: 'keenetic', version: '0.1.0' });
   registerSystemTools(server, ctx);
+  registerDeviceTools(server, ctx);
   return server;
 }
 

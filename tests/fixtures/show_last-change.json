@@ -1,0 +1,14 @@
+{
+  "date": "Thu,  6 Aug 2026 10:46:01 GMT",
+  "agent": "http/rci",
+  "user": "admin",
+  "checksum": "aa4bc868709b49cb803db0fd3cc43f6f",
+  "easyconfig": false,
+  "fail-safe": {
+    "action": "",
+    "unsaved": false,
+    "time-left": 0,
+    "rollback": false,
+    "blocked": false
+  }
+}

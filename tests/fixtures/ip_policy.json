@@ -1,0 +1,21 @@
+{
+  "Policy0": {
+    "description": "desc-7",
+    "permit": [
+      {
+        "enabled": true,
+        "interface": "GigabitEthernet1"
+      },
+      {
+        "no": true,
+        "enabled": false,
+        "interface": "Wireguard3"
+      },
+      {
+        "no": true,
+        "enabled": false,
+        "interface": "Wireguard4"
+      }
+    ]
+  }
+}

@@ -1,0 +1,31 @@
+[
+  {
+    "mac": "02:00:00:00:00:1a",
+    "access": "permit",
+    "permit": true,
+    "conform": true
+  },
+  {
+    "mac": "02:00:00:00:00:14",
+    "access": "permit",
+    "permit": true,
+    "conform": true
+  },
+  {
+    "mac": "02:00:00:00:00:1c",
+    "access": "permit",
+    "permit": true,
+    "policy": "Policy0"
+  },
+  {
+    "mac": "02:00:00:00:00:18",
+    "access": "permit",
+    "permit": true
+  },
+  {
+    "mac": "02:00:00:00:00:17",
+    "access": "permit",
+    "permit": true,
+    "conform": true
+  }
+]

@@ -1,0 +1,24 @@
+{
+  "checked": "Fri Aug  7 03:54:06 2026",
+  "enabled": true,
+  "reliable": true,
+  "gateway-accessible": true,
+  "dns-accessible": true,
+  "captive-accessible": true,
+  "internet": true,
+  "gateway": {
+    "interface": "Wireguard3",
+    "address": "0.0.0.0",
+    "failures": 0,
+    "accessible": true,
+    "excluded": false
+  },
+  "captive": {
+    "host": "captive.keenetic.ru",
+    "response": "200 (OK)",
+    "location": "",
+    "failures": 0,
+    "resolved": true,
+    "address": "87.228.71.66"
+  }
+}

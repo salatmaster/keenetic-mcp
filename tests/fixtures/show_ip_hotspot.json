@@ -1,0 +1,489 @@
+{
+  "host": [
+    {
+      "mac": "02:00:00:00:00:14",
+      "via": "02:00:00:00:00:14",
+      "ip": "192.0.2.6",
+      "ip6": [],
+      "hostname": "host-2",
+      "name": "device-1",
+      "mws-backhaul": false,
+      "interface": {
+        "id": "Bridge0",
+        "name": "device-2",
+        "description": "desc-6"
+      },
+      "dhcp": {
+        "expires": 15199
+      },
+      "registered": true,
+      "access": "permit",
+      "schedule": "",
+      "policy": "",
+      "priority": 6,
+      "active": true,
+      "rxbytes": 5327156,
+      "txbytes": 51607519,
+      "link": "up",
+      "ssid": "ssid-1",
+      "ap": "WifiMaster0/AccessPoint0",
+      "psm": false,
+      "mld": false,
+      "authenticated": true,
+      "txrate": 78,
+      "ht": 20,
+      "mode": "11n",
+      "gi": 800,
+      "rssi": -46,
+      "mcs": 8,
+      "txss": 1,
+      "ebf": false,
+      "_11": [
+        "v"
+      ],
+      "security": "wpa2-psk",
+      "uptime": 95126,
+      "first-seen": 99915,
+      "last-seen": 4,
+      "traffic-shape": {
+        "rx": 0,
+        "tx": 0,
+        "mode": "mac",
+        "schedule": ""
+      }
+    },
+    {
+      "mac": "02:00:00:00:00:15",
+      "via": "02:00:00:00:00:15",
+      "ip": "192.0.2.7",
+      "ip6": [],
+      "hostname": "host-3",
+      "name": "",
+      "mws-backhaul": false,
+      "interface": {
+        "id": "Bridge0",
+        "name": "device-2",
+        "description": "desc-6"
+      },
+      "dhcp": {
+        "expires": 15339
+      },
+      "registered": false,
+      "access": "permit",
+      "schedule": "",
+      "policy": "",
+      "priority": 6,
+      "active": true,
+      "rxbytes": 0,
+      "txbytes": 0,
+      "link": "up",
+      "ssid": "ssid-1",
+      "ap": "WifiMaster1/AccessPoint0",
+      "psm": true,
+      "mld": false,
+      "authenticated": true,
+      "txrate": 540,
+      "ht": 80,
+      "mode": "11ax",
+      "gi": 800,
+      "rssi": -77,
+      "mcs": 10,
+      "txss": 1,
+      "ebf": true,
+      "dl-ofdma": true,
+      "_11": [
+        "k",
+        "r",
+        "v"
+      ],
+      "roam": "ft",
+      "pmf": true,
+      "security": "wpa3-psk",
+      "uptime": 9469,
+      "first-seen": 99881,
+      "last-seen": 4,
+      "traffic-shape": {
+        "rx": 0,
+        "tx": 0,
+        "mode": "mac",
+        "schedule": ""
+      }
+    },
+    {
+      "mac": "02:00:00:00:00:16",
+      "via": "02:00:00:00:00:16",
+      "ip": "192.0.2.8",
+      "ip6": [
+        "fd7a:54ca:d135:0:d:e15b:7ac9:94cf"
+      ],
+      "hostname": "host-4",
+      "name": "",
+      "mws-backhaul": false,
+      "interface": {
+        "id": "Bridge0",
+        "name": "device-2",
+        "description": "desc-6"
+      },
+      "dhcp": {
+        "expires": 15397
+      },
+      "registered": false,
+      "access": "permit",
+      "schedule": "",
+      "policy": "",
+      "priority": 6,
+      "active": true,
+      "rxbytes": 0,
+      "txbytes": 0,
+      "link": "up",
+      "ssid": "ssid-1",
+      "ap": "WifiMaster1/AccessPoint0",
+      "psm": true,
+      "mld": false,
+      "authenticated": true,
+      "txrate": 432,
+      "ht": 80,
+      "mode": "11ax",
+      "gi": 800,
+      "rssi": -76,
+      "mcs": 4,
+      "txss": 2,
+      "ebf": true,
+      "dl-ofdma": true,
+      "_11": [
+        "k",
+        "r",
+        "v"
+      ],
+      "pmf": true,
+      "security": "wpa3-psk",
+      "uptime": 9416,
+      "first-seen": 98617,
+      "last-seen": 4,
+      "traffic-shape": {
+        "rx": 0,
+        "tx": 0,
+        "mode": "mac",
+        "schedule": ""
+      }
+    },
+    {
+      "mac": "02:00:00:00:00:17",
+      "via": "02:00:00:00:00:17",
+      "ip": "192.0.2.9",
+      "ip6": [],
+      "hostname": "",
+      "name": "device-3",
+      "mws-backhaul": false,
+      "interface": {
+        "id": "Bridge0",
+        "name": "device-2",
+        "description": "desc-6"
+      },
+      "dhcp": {
+        "expires": 18406
+      },
+      "registered": true,
+      "access": "permit",
+      "schedule": "",
+      "policy": "",
+      "priority": 6,
+      "active": true,
+      "rxbytes": 7730455313,
+      "txbytes": 30389676,
+      "link": "up",
+      "ssid": "ssid-1",
+      "ap": "WifiMaster1/AccessPoint0",
+      "psm": false,
+      "mld": false,
+      "authenticated": true,
+      "txrate": 867,
+      "ht": 80,
+      "mode": "11ac",
+      "gi": 400,
+      "rssi": -59,
+      "mcs": 9,
+      "txss": 2,
+      "ebf": true,
+      "dl-mu": true,
+      "_11": [
+        "k",
+        "v"
+      ],
+      "pmf": true,
+      "security": "wpa3-psk",
+      "uptime": 42836,
+      "first-seen": 95004,
+      "last-seen": 4,
+      "traffic-shape": {
+        "rx": 0,
+        "tx": 0,
+        "mode": "mac",
+        "schedule": ""
+      },
+      "ssdp": {
+        "manufacturer": "Philips",
+        "model": "Philips TV DMR",
+        "model-desc": "UPnP Media Renderer 1.0",
+        "model-numb": "2k15MTK",
+        "name": "device-4",
+        "serial": "12345",
+        "type": "urn:schemas-upnp-org:device:MediaRenderer:1"
+      }
+    },
+    {
+      "mac": "02:00:00:00:00:18",
+      "via": "02:00:00:00:00:18",
+      "ip": "192.0.2.10",
+      "ip6": [
+        "fd7a:54ca:d135:0:1caf:ec3e:34ee:ed9b"
+      ],
+      "hostname": "host-3",
+      "name": "device-5",
+      "mws-backhaul": false,
+      "interface": {
+        "id": "Bridge0",
+        "name": "device-2",
+        "description": "desc-6"
+      },
+      "dhcp": {
+        "expires": 18805
+      },
+      "registered": true,
+      "access": "permit",
+      "schedule": "",
+      "policy": "",
+      "priority": 6,
+      "active": true,
+      "rxbytes": 3312592457,
+      "txbytes": 571111782,
+      "link": "up",
+      "ssid": "ssid-1",
+      "ap": "WifiMaster1/AccessPoint0",
+      "psm": false,
+      "mld": false,
+      "authenticated": true,
+      "txrate": 960,
+      "ht": 80,
+      "mode": "11ax",
+      "gi": 800,
+      "rssi": -76,
+      "mcs": 9,
+      "txss": 2,
+      "ebf": true,
+      "dl-mu": true,
+      "ul-mu": true,
+      "dl-ofdma": true,
+      "_11": [
+        "k",
+        "r",
+        "v"
+      ],
+      "pmf": true,
+      "security": "wpa3-psk",
+      "uptime": 9331,
+      "first-seen": 99909,
+      "last-seen": 4,
+      "traffic-shape": {
+        "rx": 0,
+        "tx": 0,
+        "mode": "mac",
+        "schedule": ""
+      }
+    },
+    {
+      "mac": "02:00:00:00:00:19",
+      "via": "02:00:00:00:00:19",
+      "ip": "192.0.2.11",
+      "ip6": [
+        "fd7a:54ca:d135:0:81c:8b37:804f:2f97"
+      ],
+      "hostname": "host-4",
+      "name": "",
+      "mws-backhaul": false,
+      "interface": {
+        "id": "Bridge0",
+        "name": "device-2",
+        "description": "desc-6"
+      },
+      "dhcp": {
+        "expires": 20433
+      },
+      "registered": false,
+      "access": "permit",
+      "schedule": "",
+      "policy": "",
+      "priority": 6,
+      "active": true,
+      "rxbytes": 0,
+      "txbytes": 0,
+      "link": "up",
+      "ssid": "ssid-1",
+      "ap": "WifiMaster1/AccessPoint0",
+      "psm": true,
+      "mld": false,
+      "authenticated": true,
+      "txrate": 288,
+      "ht": 80,
+      "mode": "11ax",
+      "gi": 800,
+      "rssi": -79,
+      "mcs": 5,
+      "txss": 1,
+      "ebf": true,
+      "dl-ofdma": true,
+      "_11": [
+        "k",
+        "r",
+        "v"
+      ],
+      "pmf": true,
+      "security": "wpa3-psk",
+      "uptime": 4579,
+      "first-seen": 93021,
+      "last-seen": 4,
+      "traffic-shape": {
+        "rx": 0,
+        "tx": 0,
+        "mode": "mac",
+        "schedule": ""
+      }
+    },
+    {
+      "mac": "02:00:00:00:00:1a",
+      "via": "02:00:00:00:00:1a",
+      "ip": "192.0.2.12",
+      "ip6": [],
+      "hostname": "host-5",
+      "name": "device-6",
+      "mws-backhaul": false,
+      "interface": {
+        "id": "Bridge0",
+        "name": "device-2",
+        "description": "desc-6"
+      },
+      "dhcp": {
+        "expires": 24271
+      },
+      "registered": true,
+      "access": "permit",
+      "schedule": "",
+      "policy": "",
+      "priority": 6,
+      "active": true,
+      "rxbytes": 1525114,
+      "txbytes": 1131693,
+      "link": "up",
+      "ssid": "ssid-1",
+      "ap": "WifiMaster0/AccessPoint0",
+      "psm": false,
+      "mld": false,
+      "authenticated": true,
+      "txrate": 65,
+      "ht": 20,
+      "mode": "11n",
+      "gi": 800,
+      "rssi": -37,
+      "mcs": 7,
+      "txss": 1,
+      "ebf": false,
+      "_11": [
+        "k"
+      ],
+      "security": "wpa2-psk",
+      "uptime": 929,
+      "first-seen": 99918,
+      "last-seen": 2,
+      "traffic-shape": {
+        "rx": 0,
+        "tx": 0,
+        "mode": "mac",
+        "schedule": ""
+      }
+    },
+    {
+      "mac": "02:00:00:00:00:1b",
+      "via": "02:00:00:00:00:1b",
+      "ip": "192.0.2.13",
+      "ip6": [
+        "fd7a:54ca:d135:0:433:ee72:eba2:5e23"
+      ],
+      "hostname": "host-3",
+      "name": "",
+      "mws-backhaul": false,
+      "interface": {
+        "id": "Bridge0",
+        "name": "device-2",
+        "description": "desc-6"
+      },
+      "dhcp": {
+        "expires": 25199
+      },
+      "registered": false,
+      "access": "permit",
+      "schedule": "",
+      "policy": "",
+      "priority": 6,
+      "active": true,
+      "rxbytes": 0,
+      "txbytes": 0,
+      "link": "up",
+      "ssid": "ssid-1",
+      "ap": "WifiMaster1/AccessPoint0",
+      "psm": false,
+      "mld": false,
+      "authenticated": true,
+      "txrate": 1201,
+      "ht": 80,
+      "mode": "11ax",
+      "gi": 800,
+      "rssi": -64,
+      "mcs": 11,
+      "txss": 2,
+      "ebf": true,
+      "dl-ofdma": true,
+      "_11": [
+        "k",
+        "r",
+        "v"
+      ],
+      "pmf": true,
+      "security": "wpa3-psk",
+      "uptime": 9818,
+      "first-seen": 99914,
+      "last-seen": 2,
+      "traffic-shape": {
+        "rx": 0,
+        "tx": 0,
+        "mode": "mac",
+        "schedule": ""
+      }
+    },
+    {
+      "mac": "02:00:00:00:00:1c",
+      "via": "02:00:00:00:00:1c",
+      "ip": "0.0.0.0",
+      "ip6": [],
+      "hostname": "",
+      "name": "device-7",
+      "mws-backhaul": false,
+      "registered": true,
+      "access": "permit",
+      "schedule": "",
+      "policy": "Policy0",
+      "priority": 6,
+      "active": false,
+      "rxbytes": 0,
+      "txbytes": 0,
+      "ap": "WifiMaster1/AccessPoint1",
+      "ssid": "ssid-2",
+      "uptime": 0,
+      "traffic-shape": {
+        "rx": 0,
+        "tx": 0,
+        "mode": "mac",
+        "schedule": ""
+      }
+    }
+  ]
+}

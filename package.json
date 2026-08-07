@@ -4,18 +4,26 @@
   "description": "Control your Keenetic router from Claude, Codex, Cursor, or any MCP agent",
   "type": "module",
   "license": "MIT",
-  "engines": { "node": ">=20" },
-  "bin": { "keenetic-mcp": "./dist/index.js" },
+  "engines": {
+    "node": ">=20"
+  },
+  "bin": {
+    "keenetic-mcp": "./dist/index.js"
+  },
   "exports": {
     ".": "./dist/index.js",
     "./client": "./dist/router/client.js"
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit -p tsconfig.all.json"
+    "typecheck": "tsc --noEmit -p tsconfig.all.json",
+    "capture:fixtures": "tsx scripts/capture-fixtures.ts",
+    "smoke": "tsx scripts/smoke.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/server": "2.0.0",
@@ -23,6 +31,7 @@
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
+    "tsx": "^4.23.9",
     "typescript": "^7.0.0",
     "vitest": "^4.1.0"
   }

@@ -1,0 +1,15 @@
+node_modules/
+dist/
+server/
+coverage/
+*.tsbuildinfo
+
+# Working design docs and plans, not part of the published project
+docs/superpowers/
+
+# Local credentials and captured state - must never be committed
+.env
+.env.*
+config.local.toml
+*.cookies
+scratch/

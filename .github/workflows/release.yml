@@ -6,6 +6,8 @@ on:
 
 permissions:
   contents: read
+  # Required for npm trusted publishing: the job exchanges a short-lived OIDC
+  # token for publish rights, so no NPM_TOKEN is stored anywhere.
   id-token: write
 
 jobs:
@@ -14,11 +16,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Deliberately no registry-url here. It makes setup-node write an .npmrc
+      # that conflicts with OIDC authentication.
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-          registry-url: https://registry.npmjs.org
           cache: npm
+
+      # Trusted publishing needs a recent CLI; the one bundled with Node may lag.
+      - run: npm install -g npm@latest
 
       - run: npm ci
       - run: npm run typecheck
@@ -34,8 +40,6 @@ jobs:
             exit 1
           fi
 
-      # Provenance ties the published tarball to this workflow run, so anyone
-      # can verify it was built from this commit rather than a laptop.
+      # Provenance ties the tarball to this workflow run, so anyone can verify it
+      # was built from this commit rather than someone's laptop.
       - run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

@@ -201,6 +201,15 @@ KEENETIC_TEST_HOST=… KEENETIC_TEST_PASSWORD=… npm run smoke
 Fixtures are anonymized deterministically and a test scans the whole repository
 for anything that looks like a real MAC address, private IP or key.
 
+The setup wizard reads a password from the terminal, which no unit test can
+reach: piped input takes a different code path entirely. That part is checked
+with a script that drives a real pty, so it needs a terminal and cannot run in
+CI:
+
+```
+KEENETIC_TEST_PASSWORD=… ./scripts/verify-wizard.exp
+```
+
 ## License
 
 MIT

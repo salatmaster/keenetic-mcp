@@ -50,10 +50,15 @@ describe('runInit', () => {
     expect(out.join('\n')).not.toContain('hunter2');
   });
 
-  it('prints the config block for the user to paste', async () => {
+  it('names both agents, not just one, plus the generic config', async () => {
     const { deps, out } = await makeDeps();
     await runInit(deps);
-    expect(out.join('\n')).toMatch(/npx -y keenetic-mcp/);
+    const text = out.join('\n');
+    expect(text).toMatch(/Claude Code/);
+    expect(text).toMatch(/Codex/);
+    expect(text).toMatch(/plugin marketplace add salatmaster\/keenetic-mcp/);
+    expect(text).toMatch(/"command": "npx"/);
+    expect(text).toMatch(/"keenetic-mcp"/);
   });
 
   it('fails with a usable message when nothing answers at the gateway', async () => {

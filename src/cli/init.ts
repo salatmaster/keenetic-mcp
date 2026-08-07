@@ -69,9 +69,15 @@ export async function runInit(deps: InitDeps): Promise<number> {
   deps.out(`Password stored in ${where}`);
   deps.out(`Settings written to ${path}`);
   deps.out('');
-  deps.out('Add the server to your agent:');
-  deps.out('  Codex:  codex mcp add keenetic -- npx -y keenetic-mcp');
-  deps.out('  Others: {"command": "npx", "args": ["-y", "keenetic-mcp"]}');
+  deps.out('Add it to your agent. The plugin brings the skills along with the server:');
+  deps.out('');
+  deps.out('  Claude Code   /plugin marketplace add salatmaster/keenetic-mcp');
+  deps.out('                /plugin install keenetic@keenetic');
+  deps.out('');
+  deps.out('  Codex         codex plugin marketplace add salatmaster/keenetic-mcp');
+  deps.out('                codex plugin add keenetic@keenetic');
+  deps.out('');
+  deps.out('  Anything else {"command": "npx", "args": ["-y", "keenetic-mcp"]}');
   return 0;
 }
 
@@ -93,34 +99,85 @@ async function readGateway(): Promise<string | null> {
   }
 }
 
-// Required-but-nullable rather than optional: exactOptionalPropertyTypes
-// forbids assigning undefined back to an optional property.
-type MutableReadline = { _writeToOutput: ((text: string) => void) | undefined };
-
 interface LineSource {
   ask(question: string, echo: boolean): Promise<string>;
   close(): void;
 }
 
-/** Reads whole lines from a terminal, hiding the echo when asked to. */
+/**
+ * Reads a secret from the terminal without echoing it.
+ *
+ * Raw mode rather than readline: in terminal mode readline redraws the current
+ * line, which erases a prompt written straight to stdout, and muting its
+ * private `_writeToOutput` does not suppress the echo on current Node. Raw mode
+ * turns the echo off at the terminal, so nothing can leak it.
+ */
+function readSecret(question: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const { stdin, stdout } = process;
+    stdout.write(question);
+
+    const wasRaw = stdin.isRaw === true;
+    if (stdin.isTTY) stdin.setRawMode(true);
+    stdin.resume();
+
+    let secret = '';
+
+    const stop = (): void => {
+      stdin.off('data', onData);
+      if (stdin.isTTY) stdin.setRawMode(wasRaw);
+      stdin.pause();
+      stdout.write('\n');
+    };
+
+    const onData = (chunk: Buffer): void => {
+      for (const char of chunk.toString('utf8')) {
+        switch (char) {
+          case '\r':
+          case '\n':
+          case '\u0004': // Ctrl-D, an empty password
+            stop();
+            resolve(secret);
+            return;
+          case '\u0003': // Ctrl-C
+            stop();
+            reject(new Error('cancelled'));
+            return;
+          case '\u007f': // Delete
+          case '\b':
+            secret = secret.slice(0, -1);
+            break;
+          default:
+            // Skip the rest of the control range, including escape sequences
+            // from arrow keys, which would otherwise land in the password.
+            if (char >= ' ' && char !== '\u007f') secret += char;
+        }
+      }
+    };
+
+    stdin.on('data', onData);
+  });
+}
+
+/**
+ * Reads from a terminal.
+ *
+ * A readline interface is opened per visible question and closed again, so it
+ * is never competing with the raw-mode reader for stdin.
+ */
 function terminalSource(): LineSource {
-  const rl = createInterface({ input: process.stdin, output: process.stdout });
   return {
     async ask(question, echo) {
-      if (echo) return (await rl.question(question)).trim();
+      if (!echo) return readSecret(question);
 
-      const mutable = rl as unknown as MutableReadline;
-      const original = mutable._writeToOutput;
-      process.stdout.write(question);
-      mutable._writeToOutput = () => {};
+      const rl = createInterface({ input: process.stdin, output: process.stdout });
       try {
-        return await rl.question('');
+        return (await rl.question(question)).trim();
       } finally {
-        mutable._writeToOutput = original;
-        process.stdout.write('\n');
+        rl.close();
       }
     },
-    close: () => rl.close()
+    close: () => {}
   };
 }
 

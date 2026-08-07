@@ -1,0 +1,66 @@
+#!/usr/bin/env expect
+#
+# Checks the two things about `keenetic-mcp init` that no unit test can reach:
+# that the password prompt is actually visible, and that what you type is not.
+#
+# Both need a real terminal. Piped input will not do: under a pty the end of a
+# pipe arrives as Ctrl-D and aborts the first question, and without a pty the
+# wizard takes its buffered path and never touches the terminal code at all.
+# That is why this is expect and not vitest, and why CI cannot run it.
+#
+#   npm run build
+#   KEENETIC_TEST_PASSWORD=... ./scripts/verify-wizard.exp
+#
+# Prints PASS or FAIL for each check and exits non-zero on any failure.
+
+set timeout 30
+log_user 0
+
+if {![info exists env(KEENETIC_TEST_PASSWORD)]} {
+    puts "KEENETIC_TEST_PASSWORD must be set to a password the router accepts."
+    exit 2
+}
+set password $env(KEENETIC_TEST_PASSWORD)
+
+# A throwaway config directory, so a real installation is never touched.
+set config_dir "/tmp/keenetic-wizard-check-[pid]"
+file mkdir $config_dir
+
+spawn env KEENETIC_CONFIG_DIR=$config_dir node dist/index.js init
+
+set failures 0
+
+expect {
+    "Router address" {}
+    timeout { puts "FAIL  the wizard never asked for an address"; exit 1 }
+}
+send "\r"
+
+expect {
+    "Login" {}
+    timeout { puts "FAIL  the wizard never asked for a login"; exit 1 }
+}
+send "\r"
+
+expect {
+    "Password: " { puts "PASS  the password prompt is visible" }
+    timeout      { puts "FAIL  the password prompt never appeared"; incr failures }
+}
+
+# Type it, then look at the screen before pressing enter.
+send $password
+sleep 1
+expect {
+    -re $password { puts "FAIL  the password was echoed to the terminal"; incr failures }
+    timeout       { puts "PASS  the password was not echoed" }
+}
+send "\r"
+
+expect {
+    "Password stored in" { puts "PASS  the wizard completed" }
+    timeout              { puts "FAIL  the wizard did not finish"; incr failures }
+}
+
+expect eof
+file delete -force $config_dir
+exit [expr {$failures > 0}]

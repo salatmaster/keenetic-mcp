@@ -15,13 +15,16 @@ const SNAPSHOT: BackupResult = {
   createdAt: '2026-08-07T00:00:00.000Z'
 };
 
-function harness(hotspotHost: Record<string, unknown>, knownHost: Record<string, unknown> = {}) {
+function harness(hotspotHost: Record<string, unknown>, showHost: Record<string, unknown> = {}) {
   const posts: unknown[] = [];
   const client = {
     rci: {
       get: vi.fn(async (path: string) => {
         if (path === 'ip/hotspot/host') return [{ mac: MAC, ...hotspotHost }];
-        if (path === 'known/host') return [{ mac: MAC, ...knownHost }];
+        // The real router returns only {mac} here and never echoes the name,
+        // which is why renames are verified through show/ip/hotspot instead.
+        if (path === 'known/host') return [{ mac: MAC }];
+        if (path === 'show/ip/hotspot') return { host: [{ mac: MAC, ...showHost }] };
         return {};
       }),
       post: vi.fn(async (body: unknown) => {
@@ -71,8 +74,17 @@ describe('update_device', () => {
 
   it('sends name to the known branch, not to ip/hotspot', async () => {
     const { handlers, posts } = harness({}, { name: 'new-name' });
-    await handlers['update_device']!({ mac: MAC, name: 'new-name' });
+    const result = await handlers['update_device']!({ mac: MAC, name: 'new-name' });
+    expect(result.isError).toBeUndefined();
     expect(posts).toContainEqual({ known: { host: { mac: MAC, name: 'new-name' } } });
+  });
+
+  it('verifies a rename through the operational view, since known/host omits the name', async () => {
+    // showHost left empty: the rename did not take effect operationally.
+    const { handlers } = harness({}, {});
+    const result = await handlers['update_device']!({ mac: MAC, name: 'new-name' });
+    expect(result.isError).toBe(true);
+    expect(result.content.map(p => p.text).join('')).toMatch(/name=new-name did not take effect/);
   });
 
   it('takes a backup before applying anything', async () => {

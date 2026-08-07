@@ -25,6 +25,19 @@ async function branchEntry(
   return rows.find(row => String(row['mac']).toLowerCase() === mac.toLowerCase());
 }
 
+/**
+ * Reads a host from the operational view.
+ *
+ * Needed for name verification: the `known/host` config branch returns only
+ * `{mac}` and never echoes the name back, so a rename can only be confirmed
+ * here. Assuming a config branch echoes what you wrote is exactly the mistake
+ * that made an earlier version report every rename as failed.
+ */
+async function operationalHost(ctx: ToolContext, mac: string): Promise<HostRecord | undefined> {
+  const hosts = await fetchHosts(ctx);
+  return hosts.find(row => String(row['mac']).toLowerCase() === mac.toLowerCase());
+}
+
 export function registerDeviceTools(server: McpServer, ctx: ToolContext): void {
   server.registerTool(
     'list_devices',
@@ -179,7 +192,7 @@ export function registerDeviceTools(server: McpServer, ctx: ToolContext): void {
       if (name !== undefined) {
         await verifiedWrite({
           apply: () => ctx.client.rci.post({ known: { host: { mac, name } } }),
-          readBack: () => branchEntry(ctx, 'known/host', mac),
+          readBack: () => operationalHost(ctx, mac),
           check: row => row?.['name'] === name,
           what: `name=${name}`
         });

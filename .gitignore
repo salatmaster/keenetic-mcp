@@ -4,6 +4,11 @@ server/
 coverage/
 *.tsbuildinfo
 
+# Editor and IDE state
+.idea/
+.vscode/
+.DS_Store
+
 # Working design docs and plans, not part of the published project
 docs/superpowers/
 

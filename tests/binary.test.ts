@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { mkdtemp, symlink } from 'node:fs/promises';
+import { mkdtemp, readFile, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -57,6 +57,25 @@ describe('the built binary', () => {
     const result = await run(DIST, `${INITIALIZE}\n`, CONFIGURED);
     expect(result.stdout).toContain('"serverInfo"');
     expect(result.stdout).toContain('keenetic');
+  });
+
+  // The version in the handshake is what a client displays and what a bug
+  // report quotes, so it has to be the published one. It was a literal in
+  // src/index.ts and sat at 0.1.0 while the package shipped 0.2.1. Run against
+  // dist because that also proves package.json is reachable from the built
+  // layout, which is the only place the runtime read can go wrong.
+  it('reports the package version in serverInfo', async () => {
+    const pkg = JSON.parse(
+      await readFile(new URL('../package.json', import.meta.url), 'utf8')
+    ) as { version: string };
+
+    const result = await run(DIST, `${INITIALIZE}\n`, CONFIGURED);
+    const response = JSON.parse(result.stdout.split('\n')[0] ?? '{}') as {
+      result?: { serverInfo?: { name?: string; version?: string } };
+    };
+
+    expect(response.result?.serverInfo?.name).toBe('keenetic');
+    expect(response.result?.serverInfo?.version).toBe(pkg.version);
   });
 
   // Regression: npm installs a bin as a symlink in node_modules/.bin, so under

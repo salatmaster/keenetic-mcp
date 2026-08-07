@@ -3,8 +3,27 @@ import * as z from 'zod/v4';
 import { capList } from '../shape/budget.js';
 import { projectInterface } from '../shape/project.js';
 import { fail, guard, ok, READ_ONLY, type ToolContext, type ToolResult } from './registry.js';
+import { describeWrite, verifiedWrite } from './write.js';
 
 type InterfaceKind = 'all' | 'wan' | 'lan' | 'wifi' | 'vpn' | 'bridge';
+
+/**
+ * Reads one interface by name.
+ *
+ * Asked through POST rather than by building `show/interface/<name>`: every
+ * Wi-Fi access point is named like `WifiMaster0/AccessPoint0`, and the slash is
+ * read as a further path segment, so the GET form is a 404 for exactly the
+ * interfaces list_interfaces reports under kind=wifi.
+ */
+async function readInterface(ctx: ToolContext, name: string): Promise<Record<string, unknown>> {
+  const raw = await ctx.client.rci.post({ show: { interface: { name } } });
+  const outer = typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : {};
+  const show = typeof outer['show'] === 'object' && outer['show'] !== null
+    ? (outer['show'] as Record<string, unknown>)
+    : {};
+  const record = show['interface'];
+  return typeof record === 'object' && record !== null ? (record as Record<string, unknown>) : {};
+}
 
 const VPN_TYPES = new Set(['Wireguard', 'OpenVPN', 'L2TP', 'PPTP', 'IPsec', 'Sstp']);
 
@@ -89,7 +108,7 @@ export function registerInterfaceTools(server: McpServer, ctx: ToolContext): voi
     },
     guard(async ({ name }): Promise<ToolResult> => {
       try {
-        return ok(await ctx.client.rci.get(`show/interface/${name}`));
+        return ok(await readInterface(ctx, name));
       } catch (error) {
         return fail(
           new Error(
@@ -98,6 +117,41 @@ export function registerInterfaceTools(server: McpServer, ctx: ToolContext): voi
           )
         );
       }
+    })
+  );
+
+  // A read-only server must not advertise what it will refuse to do.
+  if (ctx.readOnly) return;
+
+  server.registerTool(
+    'set_interface_state',
+    {
+      title: 'Bring an interface up or down',
+      description:
+        'Enables or disables a network interface. Taking down a bridge or the WAN link ' +
+        'can cut off access to the router itself, including this connection. Confirm what ' +
+        'the interface carries with get_interface before calling this.',
+      inputSchema: {
+        name: z.string().describe('Interface id from list_interfaces.'),
+        state: z.enum(['up', 'down']).describe('Desired administrative state.')
+      },
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true }
+    },
+    guard(async ({ name, state }): Promise<ToolResult> => {
+      const snapshot = await ctx.backup.ensure();
+      const body =
+        state === 'up'
+          ? { interface: { [name]: { up: true } } }
+          : { interface: { [name]: { up: { no: true } } } };
+
+      await verifiedWrite({
+        apply: () => ctx.client.rci.post(body),
+        readBack: () => readInterface(ctx, name),
+        check: record => record['state'] === state,
+        what: `${name} state=${state}`
+      });
+
+      return ok(describeWrite({ interface: name, state }, snapshot.path));
     })
   );
 }

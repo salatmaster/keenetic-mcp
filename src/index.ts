@@ -5,6 +5,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/server/stdio';
 import { loadConfig } from './config/load.js';
 import { createBackupGuard } from './router/backup.js';
 import { createClient } from './router/client.js';
+import { registerConfigTools } from './tools/config.js';
 import { registerDeviceTools } from './tools/devices.js';
 import { registerInterfaceTools } from './tools/interfaces.js';
 import { registerNetworkTools } from './tools/network.js';
@@ -17,6 +18,7 @@ export function createServer(ctx: ToolContext): McpServer {
   registerDeviceTools(server, ctx);
   registerInterfaceTools(server, ctx);
   registerNetworkTools(server, ctx);
+  registerConfigTools(server, ctx);
   return server;
 }
 

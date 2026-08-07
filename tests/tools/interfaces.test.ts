@@ -44,13 +44,32 @@ const INTERFACES = {
   }
 };
 
+const ALL: Record<string, Record<string, unknown>> = {
+  ...INTERFACES,
+  'WifiMaster0/AccessPoint0': {
+    id: 'WifiMaster0/AccessPoint0',
+    type: 'AccessPoint',
+    state: 'up',
+    link: 'up'
+  }
+};
+
 function harness(get: (path: string) => Promise<unknown> = async () => INTERFACES): {
   handlers: Record<string, Handler>;
   get: ReturnType<typeof vi.fn>;
+  post: ReturnType<typeof vi.fn>;
 } {
   const spy = vi.fn(get);
+  // Rci.post resolves the parsed body and throws RciError when the router
+  // reports one, so the stub mirrors both behaviours.
+  const postSpy = vi.fn(async (body: unknown) => {
+    const name = (body as { show?: { interface?: { name?: string } } })?.show?.interface?.name;
+    const record = name === undefined ? undefined : ALL[name];
+    if (!record) throw new Error(`unable to find "${String(name)}".`);
+    return { show: { interface: { id: name, ...record } } };
+  });
   const client = {
-    rci: { get: spy, post: vi.fn(), getText: vi.fn() },
+    rci: { get: spy, post: postSpy, getText: vi.fn() },
     capabilities: vi.fn()
   } as unknown as KeeneticClient;
   const ctx: ToolContext = { client, maxResponseBytes: 25_000, readOnly: false, backup: stubBackup() };
@@ -67,7 +86,7 @@ function harness(get: (path: string) => Promise<unknown> = async () => INTERFACE
   }) as never);
 
   registerInterfaceTools(server, ctx);
-  return { handlers, get: spy };
+  return { handlers, get: spy, post: postSpy };
 }
 
 function payload(result: ToolResult): any {
@@ -110,20 +129,27 @@ describe('list_interfaces', () => {
 });
 
 describe('get_interface', () => {
-  it('requests the single-interface path and returns it whole', async () => {
-    const { handlers, get } = harness(async (path: string) => {
-      expect(path).toBe('show/interface/Wireguard3');
-      return INTERFACES.Wireguard3;
-    });
+  it('asks by name through POST rather than building a URL path', async () => {
+    const { handlers, post } = harness();
     const out = payload(await handlers['get_interface']!({ name: 'Wireguard3' }));
+    expect(post).toHaveBeenCalledWith({ show: { interface: { name: 'Wireguard3' } } });
     expect(out.type).toBe('Wireguard');
-    expect(get).toHaveBeenCalledOnce();
+  });
+
+  // Regression: GET show/interface/WifiMaster0/AccessPoint6 is a 404 on a real
+  // router because the slash is read as another path segment, and every Wi-Fi
+  // access point has a slash in its name.
+  it('handles an interface whose name contains a slash', async () => {
+    const { handlers, post } = harness();
+    const out = payload(await handlers['get_interface']!({ name: 'WifiMaster0/AccessPoint0' }));
+    expect(post).toHaveBeenCalledWith({
+      show: { interface: { name: 'WifiMaster0/AccessPoint0' } }
+    });
+    expect(out.id).toBe('WifiMaster0/AccessPoint0');
   });
 
   it('returns isError with a usable hint when the interface does not exist', async () => {
-    const { handlers } = harness(async () => {
-      throw new Error('this path does not exist on this firmware');
-    });
+    const { handlers } = harness();
     const result = await handlers['get_interface']!({ name: 'Nope0' });
     expect(result.isError).toBe(true);
     expect(result.content.map(p => p.text).join('')).toMatch(/list_interfaces/);

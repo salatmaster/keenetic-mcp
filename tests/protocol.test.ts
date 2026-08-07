@@ -6,7 +6,10 @@ import type { ToolContext } from '../src/tools/registry.js';
 import type { KeeneticClient } from '../src/router/client.js';
 import { stubBackup } from './helpers/backup.js';
 
+// backup_config is here because downloading the configuration changes nothing,
+// so it stays available even when writing is disabled.
 const READ_TOOLS = [
+  'backup_config',
   'get_config_state',
   'get_device',
   'get_interface',
@@ -19,7 +22,7 @@ const READ_TOOLS = [
   'list_routes'
 ];
 
-const WRITE_TOOLS = ['update_device'];
+const WRITE_TOOLS = ['update_device', 'set_interface_state', 'save_config'];
 
 function context(readOnly: boolean): ToolContext {
   const client = {
@@ -74,7 +77,7 @@ describe('assembled server over MCP', () => {
 });
 
 describe('read-only mode', () => {
-  it('advertises exactly the ten read tools and nothing else', async () => {
+  it('advertises exactly the read tools and nothing else', async () => {
     const client = await connectedClient(true);
     const { tools } = await client.listTools();
     expect(tools.map(t => t.name).sort()).toEqual([...READ_TOOLS].sort());

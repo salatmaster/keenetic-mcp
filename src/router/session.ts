@@ -28,17 +28,43 @@ export class Session {
   private readonly opts: SessionOptions;
   /** The router randomises the cookie name, so both parts are stored verbatim. */
   private cookie: string | null = null;
+  /** Set while an authentication is in flight so concurrent callers share it. */
+  private authInFlight: Promise<void> | null = null;
 
   constructor(opts: SessionOptions) {
     this.opts = opts;
   }
 
-  /** Lazy authentication: the first 401 drives the handshake, then the call replays. */
+  /**
+   * Lazy authentication: the first 401 drives the handshake, then the call
+   * replays exactly once. The session is a 300-second sliding window, so an
+   * idle gap between agent turns routinely expires it.
+   */
   async request(method: 'GET' | 'POST', path: string, body?: unknown): Promise<Response> {
     const first = await this.send(method, path, body);
     if (first.status !== 401) return first;
-    await this.authenticate();
-    return this.send(method, path, body);
+
+    await this.ensureAuthenticated();
+
+    const second = await this.send(method, path, body);
+    if (second.status === 401) {
+      throw new AuthError(
+        `The router rejected credentials for user "${this.opts.login}" after ` +
+          `re-authenticating for ${method} ${path}.`
+      );
+    }
+    return second;
+  }
+
+  private async ensureAuthenticated(): Promise<void> {
+    if (!this.authInFlight) {
+      // Cleared in `finally` so a rejected attempt is never cached: the next
+      // caller starts a fresh handshake rather than inheriting the failure.
+      this.authInFlight = this.authenticate().finally(() => {
+        this.authInFlight = null;
+      });
+    }
+    return this.authInFlight;
   }
 
   protected async send(method: 'GET' | 'POST', path: string, body?: unknown): Promise<Response> {

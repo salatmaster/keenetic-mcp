@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { realpathSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { McpServer } from '@modelcontextprotocol/server';
 import { StdioServerTransport } from '@modelcontextprotocol/server/stdio';
@@ -64,8 +65,25 @@ async function main(): Promise<void> {
   await createServer(ctx).connect(new StdioServerTransport());
 }
 
-const entry = process.argv[1];
-if (entry !== undefined && import.meta.url === pathToFileURL(entry).href) {
+/**
+ * True when this module is the program being run, rather than imported.
+ *
+ * The entry path has to be resolved through symlinks first: npm installs a bin
+ * as a symlink in node_modules/.bin, so under `npx keenetic-mcp` argv[1] is the
+ * link and import.meta.url is its target. Comparing them unresolved never
+ * matches, and the server exits silently without ever starting.
+ */
+function isProgramEntry(): boolean {
+  const entry = process.argv[1];
+  if (entry === undefined) return false;
+  try {
+    return import.meta.url === pathToFileURL(realpathSync(entry)).href;
+  } catch {
+    return false;
+  }
+}
+
+if (isProgramEntry()) {
   main().catch((error: unknown) => {
     // stderr only: stdout carries the MCP protocol stream.
     process.stderr.write(`keenetic-mcp failed to start: ${(error as Error).message}\n`);

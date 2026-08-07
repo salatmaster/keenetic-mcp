@@ -10,13 +10,23 @@
       "name": "keenetic",
       "source": "./plugins/keenetic",
       "description": "Control your Keenetic router from Claude: who is on the network, Wi-Fi, interfaces, routing policies, and safe configuration changes",
-      "version": "0.1.0",
-      "author": { "name": "salatmaster" },
+      "version": "0.1.1",
+      "author": {
+        "name": "salatmaster"
+      },
       "homepage": "https://github.com/salatmaster/keenetic-mcp",
       "repository": "https://github.com/salatmaster/keenetic-mcp",
       "license": "MIT",
       "category": "networking",
-      "tags": ["keenetic", "router", "network", "mcp", "home-lab", "ndms", "rci"]
+      "tags": [
+        "keenetic",
+        "router",
+        "network",
+        "mcp",
+        "home-lab",
+        "ndms",
+        "rci"
+      ]
     }
   ]
 }

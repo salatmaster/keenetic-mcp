@@ -1,6 +1,6 @@
 {
   "name": "keenetic-mcp",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Control your Keenetic router from Claude, Codex, Cursor, or any MCP agent",
   "type": "module",
   "license": "MIT",
@@ -46,6 +46,7 @@
   ],
   "scripts": {
     "build": "tsc",
+    "pretest": "npm run build",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit --pretty false -p tsconfig.all.json",

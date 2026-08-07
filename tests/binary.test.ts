@@ -1,0 +1,86 @@
+import { spawn } from 'node:child_process';
+import { mkdtemp, symlink } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { describe, expect, it } from 'vitest';
+
+const DIST = fileURLToPath(new URL('../dist/index.js', import.meta.url));
+
+const INITIALIZE = JSON.stringify({
+  jsonrpc: '2.0',
+  id: 1,
+  method: 'initialize',
+  params: {
+    protocolVersion: '2025-06-18',
+    capabilities: {},
+    clientInfo: { name: 'binary-test', version: '0.0.0' }
+  }
+});
+
+interface RunResult {
+  code: number;
+  stdout: string;
+  stderr: string;
+}
+
+function run(entry: string, stdin: string, env: NodeJS.ProcessEnv): Promise<RunResult> {
+  return new Promise(resolve => {
+    const child = spawn(process.execPath, [entry], { env });
+    let stdout = '';
+    let stderr = '';
+    child.stdout.on('data', chunk => {
+      stdout += String(chunk);
+    });
+    child.stderr.on('data', chunk => {
+      stderr += String(chunk);
+    });
+    child.on('close', code => resolve({ code: code ?? 1, stdout, stderr }));
+    child.stdin.end(stdin);
+  });
+}
+
+const CONFIGURED: NodeJS.ProcessEnv = {
+  ...process.env,
+  KEENETIC_HOST: '192.0.2.1',
+  KEENETIC_PASSWORD: 'not-used-for-tools-list'
+};
+
+/**
+ * These run the built artefact, so `npm run build` must have happened. They
+ * exist because everything else in the suite imports `createServer` directly
+ * and therefore never exercises the entry-point guard, which is exactly where
+ * 0.1.0 was broken.
+ */
+describe('the built binary', () => {
+  it('answers initialize when run by its own path', async () => {
+    const result = await run(DIST, `${INITIALIZE}\n`, CONFIGURED);
+    expect(result.stdout).toContain('"serverInfo"');
+    expect(result.stdout).toContain('keenetic');
+  });
+
+  // Regression: npm installs a bin as a symlink in node_modules/.bin, so under
+  // npx the entry path is the link and the module path is its target. Version
+  // 0.1.0 compared them unresolved, matched nothing, and exited silently.
+  it('answers initialize when run through a symlink, the way npx does', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'kn-bin-'));
+    const link = join(dir, 'keenetic-mcp');
+    await symlink(DIST, link);
+
+    const result = await run(link, `${INITIALIZE}\n`, CONFIGURED);
+    expect(result.stdout, 'the server produced no output through a symlink').toContain(
+      '"serverInfo"'
+    );
+  });
+
+  it('explains itself and fails when nothing is configured', async () => {
+    const bare: NodeJS.ProcessEnv = { ...process.env };
+    delete bare['KEENETIC_HOST'];
+    delete bare['KEENETIC_PASSWORD'];
+    bare['KEENETIC_CONFIG_DIR'] = await mkdtemp(join(tmpdir(), 'kn-empty-'));
+
+    const result = await run(DIST, '', bare);
+    expect(result.code).not.toBe(0);
+    expect(result.stderr).toContain('keenetic-mcp init');
+  });
+});

@@ -42,4 +42,8 @@ jobs:
 
       # Provenance ties the tarball to this workflow run, so anyone can verify it
       # was built from this commit rather than someone's laptop.
+      #
+      # A misconfigured trusted publisher surfaces here as a misleading 404 or
+      # ENEEDAUTH rather than a clear message. Check that the publisher on npm
+      # names this repository and this workflow filename exactly.
       - run: npm publish --provenance --access public

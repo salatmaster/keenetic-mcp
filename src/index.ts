@@ -6,6 +6,7 @@ import { loadConfig } from './config/load.js';
 import { createClient } from './router/client.js';
 import { registerDeviceTools } from './tools/devices.js';
 import { registerInterfaceTools } from './tools/interfaces.js';
+import { registerNetworkTools } from './tools/network.js';
 import type { ToolContext } from './tools/registry.js';
 import { registerSystemTools } from './tools/system.js';
 
@@ -14,6 +15,7 @@ export function createServer(ctx: ToolContext): McpServer {
   registerSystemTools(server, ctx);
   registerDeviceTools(server, ctx);
   registerInterfaceTools(server, ctx);
+  registerNetworkTools(server, ctx);
   return server;
 }
 

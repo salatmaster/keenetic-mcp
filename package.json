@@ -4,6 +4,31 @@
   "description": "Control your Keenetic router from Claude, Codex, Cursor, or any MCP agent",
   "type": "module",
   "license": "MIT",
+  "keywords": [
+    "keenetic",
+    "router",
+    "mcp",
+    "model-context-protocol",
+    "claude",
+    "codex",
+    "network",
+    "home-network",
+    "ndms",
+    "rci",
+    "keeneticos",
+    "wifi",
+    "llm",
+    "ai-agent"
+  ],
+  "homepage": "https://github.com/salatmaster/keenetic-mcp#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/salatmaster/keenetic-mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/salatmaster/keenetic-mcp/issues"
+  },
+  "author": "salatmaster",
   "engines": {
     "node": ">=20"
   },
@@ -15,7 +40,9 @@
     "./client": "./dist/router/client.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "README.md",
+    "LICENSE"
   ],
   "scripts": {
     "build": "tsc",

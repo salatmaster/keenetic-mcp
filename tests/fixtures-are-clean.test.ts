@@ -3,7 +3,10 @@ import { describe, expect, it } from 'vitest';
 
 const ROOT = new URL('../', import.meta.url);
 
-const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', 'coverage', 'docs']);
+const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', 'coverage']);
+// Working design docs are gitignored, so they never ship; published docs are
+// scanned like everything else.
+const SKIP_PATHS = ['docs/superpowers/'];
 
 // A MAC outside the locally administered 02:… range means a real device leaked.
 const REAL_MAC = /\b(?!02:)[0-9a-f]{2}(:[0-9a-f]{2}){5}\b/gi;
@@ -36,6 +39,9 @@ function offendingMacs(text: string): string[] {
   return [...new Set(found.map(mac => mac.toLowerCase()))].filter(mac => !ALLOWED_MACS.has(mac));
 }
 
+// Addresses and keys have shapes, so they can be detected. Device names and
+// SSIDs do not: listing the real ones here would publish exactly what this file
+// exists to keep out. Those are caught by reading a diff before pushing it.
 describe('the repository contains no real network data', () => {
   it('scans every source, test and fixture file', async () => {
     const files: URL[] = [];
@@ -46,6 +52,7 @@ describe('the repository contains no real network data', () => {
       const name = decodeURIComponent(file.pathname).slice(decodeURIComponent(ROOT.pathname).length);
       // Integrity hashes in the lockfile trip the key detector and are not secrets.
       if (name === 'package-lock.json') continue;
+      if (SKIP_PATHS.some(prefix => name.startsWith(prefix))) continue;
 
       const text = await readFile(file, 'utf8');
       expect(offendingMacs(text), `${name} contains a real-looking MAC`).toEqual([]);

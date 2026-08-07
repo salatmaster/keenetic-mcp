@@ -3,6 +3,7 @@ import { pathToFileURL } from 'node:url';
 import { McpServer } from '@modelcontextprotocol/server';
 import { StdioServerTransport } from '@modelcontextprotocol/server/stdio';
 import { loadConfig } from './config/load.js';
+import { createBackupGuard } from './router/backup.js';
 import { createClient } from './router/client.js';
 import { registerDeviceTools } from './tools/devices.js';
 import { registerInterfaceTools } from './tools/interfaces.js';
@@ -21,14 +22,16 @@ export function createServer(ctx: ToolContext): McpServer {
 
 async function main(): Promise<void> {
   const config = loadConfig(process.argv.slice(2), process.env);
+  const client = createClient({
+    host: config.host,
+    login: config.login,
+    password: config.password
+  });
   const ctx: ToolContext = {
-    client: createClient({
-      host: config.host,
-      login: config.login,
-      password: config.password
-    }),
+    client,
     maxResponseBytes: config.maxResponseBytes,
-    readOnly: config.readOnly
+    readOnly: config.readOnly,
+    backup: createBackupGuard(client.rci, config.host, () => new Date())
   };
 
   await createServer(ctx).connect(new StdioServerTransport());

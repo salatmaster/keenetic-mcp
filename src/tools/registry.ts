@@ -1,10 +1,13 @@
 import { KeeneticError } from '../router/errors.js';
+import type { BackupGuard } from '../router/backup.js';
 import type { KeeneticClient } from '../router/client.js';
 
 export interface ToolContext {
   client: KeeneticClient;
   maxResponseBytes: number;
   readOnly: boolean;
+  /** Snapshots the startup config once, before the first mutating call. */
+  backup: BackupGuard;
 }
 
 /**

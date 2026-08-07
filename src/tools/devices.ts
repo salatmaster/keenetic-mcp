@@ -3,6 +3,7 @@ import * as z from 'zod/v4';
 import { capList } from '../shape/budget.js';
 import { projectDevice } from '../shape/project.js';
 import { fail, guard, ok, READ_ONLY, type ToolContext, type ToolResult } from './registry.js';
+import { describeWrite, verifiedWrite } from './write.js';
 
 type HostRecord = Record<string, unknown>;
 
@@ -11,6 +12,17 @@ async function fetchHosts(ctx: ToolContext): Promise<HostRecord[]> {
   const container = typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : {};
   const hosts = container['host'];
   return Array.isArray(hosts) ? (hosts as HostRecord[]) : [];
+}
+
+/** Reads one row out of a config branch that stores hosts as a MAC-keyed array. */
+async function branchEntry(
+  ctx: ToolContext,
+  path: 'ip/hotspot/host' | 'known/host',
+  mac: string
+): Promise<HostRecord | undefined> {
+  const raw = await ctx.client.rci.get(path);
+  const rows = Array.isArray(raw) ? (raw as HostRecord[]) : [];
+  return rows.find(row => String(row['mac']).toLowerCase() === mac.toLowerCase());
 }
 
 export function registerDeviceTools(server: McpServer, ctx: ToolContext): void {
@@ -120,6 +132,90 @@ export function registerDeviceTools(server: McpServer, ctx: ToolContext): void {
         );
       }
       return ok(match);
+    })
+  );
+
+  // A read-only server must not advertise what it will refuse to do.
+  if (ctx.readOnly) return;
+
+  server.registerTool(
+    'update_device',
+    {
+      title: 'Change a device',
+      description:
+        'Rename a device, allow or block its internet access, put it on a routing policy ' +
+        'or a schedule, or set its traffic priority. Changes apply immediately but are ' +
+        'NOT saved: a reboot discards them until save_config is called.',
+      inputSchema: {
+        mac: z.string().describe('MAC address of the device, any case.'),
+        name: z.string().optional().describe('New name. Also registers the device.'),
+        access: z.enum(['permit', 'deny']).optional().describe('Allow or block internet access.'),
+        policy: z.string().optional().describe('Policy name from list_policies.'),
+        schedule: z.string().optional().describe('Schedule name.'),
+        priority: z.number().int().min(0).max(7).optional().describe('Traffic priority, 0 to 7.')
+      },
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true }
+    },
+    guard(async ({ mac, name, access, policy, schedule, priority }): Promise<ToolResult> => {
+      if (
+        name === undefined &&
+        access === undefined &&
+        policy === undefined &&
+        schedule === undefined &&
+        priority === undefined
+      ) {
+        return fail(
+          new Error(
+            'Nothing to change. Supply at least one of name, access, policy, schedule or priority.'
+          )
+        );
+      }
+
+      const snapshot = await ctx.backup.ensure();
+      const applied: Record<string, unknown> = {};
+
+      // name first: ip/hotspot refuses every setting for a host that is not
+      // registered in the known branch.
+      if (name !== undefined) {
+        await verifiedWrite({
+          apply: () => ctx.client.rci.post({ known: { host: { mac, name } } }),
+          readBack: () => branchEntry(ctx, 'known/host', mac),
+          check: row => row?.['name'] === name,
+          what: `name=${name}`
+        });
+        applied['name'] = name;
+      }
+
+      if (access !== undefined) {
+        const body =
+          access === 'deny'
+            ? { ip: { hotspot: { host: { mac, deny: true } } } }
+            : { ip: { hotspot: { host: { mac, permit: true } } } };
+        await verifiedWrite({
+          apply: () => ctx.client.rci.post(body),
+          readBack: () => branchEntry(ctx, 'ip/hotspot/host', mac),
+          check: row => row?.['access'] === access,
+          what: `access=${access}`
+        });
+        applied['access'] = access;
+      }
+
+      for (const [field, value] of [
+        ['policy', policy],
+        ['schedule', schedule],
+        ['priority', priority]
+      ] as const) {
+        if (value === undefined) continue;
+        await verifiedWrite({
+          apply: () => ctx.client.rci.post({ ip: { hotspot: { host: { mac, [field]: value } } } }),
+          readBack: () => branchEntry(ctx, 'ip/hotspot/host', mac),
+          check: row => row?.[field] === value,
+          what: `${field}=${String(value)}`
+        });
+        applied[field] = value;
+      }
+
+      return ok(describeWrite(applied, snapshot.path));
     })
   );
 }

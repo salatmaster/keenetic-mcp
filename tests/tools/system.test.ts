@@ -4,6 +4,7 @@ import { registerSystemTools } from '../../src/tools/system.js';
 import { fail, ok, type ToolContext, type ToolResult } from '../../src/tools/registry.js';
 import { AuthError } from '../../src/router/errors.js';
 import type { KeeneticClient } from '../../src/router/client.js';
+import { stubBackup } from '../helpers/backup.js';
 
 type Handler = (args: Record<string, unknown>) => Promise<ToolResult>;
 interface Captured {
@@ -24,7 +25,7 @@ function contextWith(get: (path: string) => Promise<unknown>): ToolContext {
     rci: { get, post: vi.fn(), getText: vi.fn() },
     capabilities: async () => CAPS
   } as unknown as KeeneticClient;
-  return { client, maxResponseBytes: 25_000, readOnly: false };
+  return { client, maxResponseBytes: 25_000, readOnly: false, backup: stubBackup() };
 }
 
 /** Registers the tools against a real McpServer with registerTool intercepted. */

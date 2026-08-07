@@ -3,6 +3,7 @@ import { McpServer } from '@modelcontextprotocol/server';
 import { registerNetworkTools } from '../../src/tools/network.js';
 import type { ToolContext, ToolResult } from '../../src/tools/registry.js';
 import type { KeeneticClient } from '../../src/router/client.js';
+import { stubBackup } from '../helpers/backup.js';
 
 type Handler = (args: Record<string, unknown>) => Promise<ToolResult>;
 
@@ -60,7 +61,7 @@ function harness(): Record<string, Handler> {
     return {} as never;
   }) as never);
 
-  registerNetworkTools(server, { client, maxResponseBytes: 25_000, readOnly: false });
+  registerNetworkTools(server, { client, maxResponseBytes: 25_000, readOnly: false, backup: stubBackup() });
   return handlers;
 }
 

@@ -3,6 +3,7 @@ import { McpServer } from '@modelcontextprotocol/server';
 import { registerInterfaceTools } from '../../src/tools/interfaces.js';
 import type { ToolContext, ToolResult } from '../../src/tools/registry.js';
 import type { KeeneticClient } from '../../src/router/client.js';
+import { stubBackup } from '../helpers/backup.js';
 
 type Handler = (args: Record<string, unknown>) => Promise<ToolResult>;
 
@@ -52,7 +53,7 @@ function harness(get: (path: string) => Promise<unknown> = async () => INTERFACE
     rci: { get: spy, post: vi.fn(), getText: vi.fn() },
     capabilities: vi.fn()
   } as unknown as KeeneticClient;
-  const ctx: ToolContext = { client, maxResponseBytes: 25_000, readOnly: false };
+  const ctx: ToolContext = { client, maxResponseBytes: 25_000, readOnly: false, backup: stubBackup() };
 
   const server = new McpServer({ name: 'test', version: '0.0.0' });
   const handlers: Record<string, Handler> = {};

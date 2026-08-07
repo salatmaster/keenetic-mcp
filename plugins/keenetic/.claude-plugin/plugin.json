@@ -1,7 +1,6 @@
 {
   "name": "keenetic",
   "description": "Control your Keenetic router from Claude: who is on the network, Wi-Fi, interfaces, routing policies, and safe configuration changes",
-  "version": "0.2.1",
   "author": {
     "name": "salatmaster"
   },

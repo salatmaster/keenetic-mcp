@@ -4,7 +4,7 @@
       "command": "npx",
       "args": [
         "-y",
-        "keenetic-mcp@^0.2"
+        "keenetic-mcp@^0"
       ]
     }
   }

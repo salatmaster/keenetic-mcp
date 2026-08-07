@@ -31,14 +31,23 @@ jobs:
       - run: npm test
       - run: npm run build
 
-      - name: Refuse to publish a tag that disagrees with package.json
+      # The tag is the only place a release version exists. package.json carries
+      # 0.0.0-dev in git and is stamped here, after the tests have run against
+      # the placeholder and before anything is packed. Nothing is committed:
+      # the tree that ships is the tagged one plus this one field.
+      #
+      # A test enforces the placeholder, so a tree that got this far cannot have
+      # smuggled a version in, and the stamp can never disagree with the tag.
+      - name: Take the version from the tag
         run: |
-          tag="${GITHUB_REF_NAME#v}"
-          pkg="$(node -p 'require("./package.json").version')"
-          if [ "$tag" != "$pkg" ]; then
-            echo "tag $tag does not match package.json $pkg"
+          version="${GITHUB_REF_NAME#v}"
+          if ! printf '%s' "$version" \
+            | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$'; then
+            echo "tag $GITHUB_REF_NAME does not name a version"
             exit 1
           fi
+          npm version "$version" --no-git-tag-version
+          echo "publishing $(node -p 'require("./package.json").version')"
 
       # Provenance ties the tarball to this workflow run, so anyone can verify it
       # was built from this commit rather than someone's laptop.

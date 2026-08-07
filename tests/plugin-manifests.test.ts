@@ -27,19 +27,6 @@ interface McpConfig {
  * apart silently unless something checks.
  */
 describe('plugin manifests', () => {
-  it('agree with package.json on the version', async () => {
-    const pkg = await json<{ version: string }>('package.json');
-    const claude = await json<Manifest>('plugins/keenetic/.claude-plugin/plugin.json');
-    const codex = await json<Manifest>('plugins/keenetic/.codex-plugin/plugin.json');
-    const market = await json<{ plugins: Array<{ version: string }> }>(
-      '.claude-plugin/marketplace.json'
-    );
-
-    expect(claude.version).toBe(pkg.version);
-    expect(codex.version).toBe(pkg.version);
-    expect(market.plugins[0]?.version).toBe(pkg.version);
-  });
-
   it('agree on name and license', async () => {
     const claude = await json<Manifest>('plugins/keenetic/.claude-plugin/plugin.json');
     const codex = await json<Manifest>('plugins/keenetic/.codex-plugin/plugin.json');
@@ -58,17 +45,6 @@ describe('plugin manifests', () => {
     expect(server, 'the server must be keyed under mcpServers').toBeDefined();
     expect(server?.command).toBe('npx');
     expect(server?.args).toContain('-y');
-  });
-
-  it('pin the package to the major version being released', async () => {
-    const pkg = await json<{ version: string }>('package.json');
-    const mcp = await json<McpConfig>('plugins/keenetic/.mcp.json');
-    const spec = mcp.mcpServers['keenetic']?.args.at(-1) ?? '';
-
-    const major = pkg.version.split('.').slice(0, 2).join('.');
-    expect(spec, `${spec} does not pin the current major of ${pkg.version}`).toBe(
-      `keenetic-mcp@^${major}`
-    );
   });
 
   it('point the Codex manifest at the shared skills and server', async () => {

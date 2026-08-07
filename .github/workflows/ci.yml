@@ -29,11 +29,6 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
-      # package.json is the only place a version is edited by hand; everything
-      # else is generated from it by the `version` lifecycle script.
-      - name: Manifest versions match package.json
-        run: npx tsx scripts/sync-versions.ts --check
-
       # pretest builds, so the binary tests run against a real artefact.
       - name: Test
         run: npm test

@@ -185,10 +185,16 @@ command's syntax from the router itself.
 
 ```
 npm install
-npm test          # 190 tests, no router required
+npm test          # no router required
 npm run typecheck
 npm run build
 ```
+
+A checkout reports its version as `0.0.0-dev`, because there is no version
+written down anywhere in the sources. Put `KEENETIC_MCP_VERSION` in a `.env` at
+the repository root to say otherwise; the same file can hold `KEENETIC_HOST`
+and `KEENETIC_PASSWORD` so you do not have to export them. A real environment
+variable always wins over that file, and an installed copy never reads one.
 
 Tests run against sanitized fixtures captured from a real router. To refresh
 them, and to run a read-only smoke test against your own:
@@ -209,6 +215,23 @@ CI:
 ```
 KEENETIC_TEST_PASSWORD=… ./scripts/verify-wizard.exp
 ```
+
+### Releasing
+
+A release is a tag and nothing else. There is no version commit to write,
+because there is no version in the repository to change: `package.json` carries
+`0.0.0-dev`, the plugin manifests carry none at all, and the release workflow
+stamps the tag into `package.json` immediately before publishing without
+committing it.
+
+```
+git tag v0.2.2 && git push origin v0.2.2
+```
+
+The workflow refuses a tag that does not name a version, and a test refuses a
+tree that has a version written into it, so the two can never disagree. The
+plugins pin `keenetic-mcp@^0`, which tracks the major only and is meant to be
+edited once, at 1.0.
 
 ## License
 

@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 import { realpathSync } from 'node:fs';
-import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 import { McpServer } from '@modelcontextprotocol/server';
 import { StdioServerTransport } from '@modelcontextprotocol/server/stdio';
@@ -17,15 +16,10 @@ import { registerNetworkTools } from './tools/network.js';
 import { registerRawTool } from './tools/raw.js';
 import type { ToolContext } from './tools/registry.js';
 import { registerSystemTools } from './tools/system.js';
-
-// Read rather than repeated as a literal: package.json is the only place a
-// version is edited by hand, and a hardcoded one here went stale silently -
-// the handshake still reported 0.1.0 two releases later. `../package.json`
-// resolves from dist/index.js and src/index.ts alike, and npm always packs it.
-const VERSION = createRequire(import.meta.url)('../package.json').version as string;
+import { loadLocalEnv, resolveVersion } from './version.js';
 
 export function createServer(ctx: ToolContext): McpServer {
-  const server = new McpServer({ name: 'keenetic', version: VERSION });
+  const server = new McpServer({ name: 'keenetic', version: resolveVersion() });
   registerSystemTools(server, ctx);
   registerDeviceTools(server, ctx);
   registerInterfaceTools(server, ctx);
@@ -36,6 +30,10 @@ export function createServer(ctx: ToolContext): McpServer {
 }
 
 async function main(): Promise<void> {
+  // Before anything reads the environment, so a checkout can keep its router
+  // credentials in .env instead of exporting them. A no-op once installed.
+  loadLocalEnv();
+
   // `init` is a subcommand rather than a second binary, so the published
   // surface stays a single command.
   if (process.argv[2] === 'init') {

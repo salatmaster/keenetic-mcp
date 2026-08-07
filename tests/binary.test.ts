@@ -43,7 +43,13 @@ function run(entry: string, stdin: string, env: NodeJS.ProcessEnv): Promise<RunR
 const CONFIGURED: NodeJS.ProcessEnv = {
   ...process.env,
   KEENETIC_HOST: '192.0.2.1',
-  KEENETIC_PASSWORD: 'not-used-for-tools-list'
+  KEENETIC_PASSWORD: 'not-used-for-tools-list',
+  // Pinned empty rather than left out. The server reads a .env from the
+  // repository root when there is one, and a variable already in the
+  // environment takes precedence over that file even when it is empty - so
+  // this keeps a developer's own .env from deciding what the version test
+  // sees, without weakening the assertion below.
+  KEENETIC_MCP_VERSION: ''
 };
 
 /**
@@ -63,7 +69,9 @@ describe('the built binary', () => {
   // report quotes, so it has to be the published one. It was a literal in
   // src/index.ts and sat at 0.1.0 while the package shipped 0.2.1. Run against
   // dist because that also proves package.json is reachable from the built
-  // layout, which is the only place the runtime read can go wrong.
+  // layout, which is the only place the runtime read can go wrong - and that
+  // is the whole mechanism now, since the release workflow stamps the tag into
+  // package.json and nothing else.
   it('reports the package version in serverInfo', async () => {
     const pkg = JSON.parse(
       await readFile(new URL('../package.json', import.meta.url), 'utf8')
@@ -76,6 +84,22 @@ describe('the built binary', () => {
 
     expect(response.result?.serverInfo?.name).toBe('keenetic');
     expect(response.result?.serverInfo?.version).toBe(pkg.version);
+  });
+
+  // The escape hatch for reproducing a report against a version you are not
+  // running. Worth a test because it sits in front of the read above: if the
+  // precedence were the other way round it would look like it worked here and
+  // do nothing where it matters.
+  it('lets KEENETIC_MCP_VERSION override what it reports', async () => {
+    const result = await run(DIST, `${INITIALIZE}\n`, {
+      ...CONFIGURED,
+      KEENETIC_MCP_VERSION: '9.9.9-probe'
+    });
+    const response = JSON.parse(result.stdout.split('\n')[0] ?? '{}') as {
+      result?: { serverInfo?: { version?: string } };
+    };
+
+    expect(response.result?.serverInfo?.version).toBe('9.9.9-probe');
   });
 
   // Regression: npm installs a bin as a symlink in node_modules/.bin, so under

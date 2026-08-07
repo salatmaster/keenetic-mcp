@@ -21,7 +21,7 @@
     "build": "tsc",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit -p tsconfig.all.json",
+    "typecheck": "tsc --noEmit --pretty false -p tsconfig.all.json",
     "capture:fixtures": "tsx scripts/capture-fixtures.ts",
     "smoke": "tsx scripts/smoke.ts"
   },

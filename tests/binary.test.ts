@@ -24,9 +24,14 @@ interface RunResult {
   stderr: string;
 }
 
-function run(entry: string, stdin: string, env: NodeJS.ProcessEnv): Promise<RunResult> {
+function run(
+  entry: string,
+  stdin: string,
+  env: NodeJS.ProcessEnv,
+  args: string[] = []
+): Promise<RunResult> {
   return new Promise(resolve => {
-    const child = spawn(process.execPath, [entry], { env });
+    const child = spawn(process.execPath, [entry, ...args], { env });
     let stdout = '';
     let stderr = '';
     child.stdout.on('data', chunk => {
@@ -100,6 +105,21 @@ describe('the built binary', () => {
     };
 
     expect(response.result?.serverInfo?.version).toBe('9.9.9-probe');
+  });
+
+  // Answered before the configuration is read, so it works on a machine that
+  // has never run the wizard. That is the machine a bug report comes from.
+  it('prints its version and exits, with no router configured', async () => {
+    const result = await run(DIST, '', { KEENETIC_MCP_VERSION: '' }, ['--version']);
+
+    expect(result.code).toBe(0);
+    expect(result.stdout.trim()).toBe(
+      (
+        JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8')) as {
+          version: string;
+        }
+      ).version
+    );
   });
 
   // Regression: npm installs a bin as a symlink in node_modules/.bin, so under

@@ -47,6 +47,11 @@ jobs:
             exit 1
           fi
           npm version "$version" --no-git-tag-version
+          # server.json repeats the version twice and the MCP registry rejects a
+          # value that disagrees with the published package, so it is stamped
+          # from the same tag rather than kept in step by hand.
+          jq --arg v "$version" '.version = $v | .packages[0].version = $v' \
+            server.json > server.tmp && mv server.tmp server.json
           echo "publishing $(node -p 'require("./package.json").version')"
 
       # Provenance ties the tarball to this workflow run, so anyone can verify it
@@ -56,3 +61,23 @@ jobs:
       # ENEEDAUTH rather than a clear message. Check that the publisher on npm
       # names this repository and this workflow filename exactly.
       - run: npm publish --provenance --access public
+
+      # The registry indexes metadata only, and proves ownership by fetching the
+      # published package and matching its `mcpName` against the server name. So
+      # it has to run after npm, and it retries: npm accepts the publish before
+      # the package is queryable, and the first attempt can lose that race.
+      #
+      # Authenticated by the same OIDC token as the npm publish above, so there
+      # is still no secret stored anywhere.
+      - name: Publish to the MCP Registry
+        run: |
+          curl -L "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" \
+            | tar xz mcp-publisher
+          ./mcp-publisher login github-oidc
+          for attempt in 1 2 3 4; do
+            if ./mcp-publisher publish; then exit 0; fi
+            echo "attempt $attempt failed, waiting for npm to catch up"
+            sleep 20
+          done
+          echo "the package is on npm but the registry would not take it"
+          exit 1

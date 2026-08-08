@@ -163,6 +163,9 @@ different manifests but share the same skills and the same server definition.
 - **LAN only.** No cloud, no telemetry, no outbound connection to anything but
   your router.
 
+Where the password is stored on each platform, and how to report something
+privately, are in [SECURITY.md](SECURITY.md).
+
 ## Supported routers
 
 RCI, the API this uses, is a standard part of KeeneticOS rather than a feature

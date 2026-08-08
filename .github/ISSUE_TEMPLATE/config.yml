@@ -1,0 +1,10 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Design question, or another router vendor
+    url: https://github.com/salatmaster/keenetic-mcp/issues/new
+    about: >-
+      Open a blank issue. Questions about where a boundary should sit, or
+      whether a change would be taken, are welcome before any code is written.
+  - name: Something with security implications
+    url: https://github.com/salatmaster/keenetic-mcp/security/advisories/new
+    about: Report privately rather than in a public issue.

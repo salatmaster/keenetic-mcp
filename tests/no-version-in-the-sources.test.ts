@@ -27,6 +27,30 @@ describe('no version is written down in the sources', () => {
     expect(pkg.version).toBe(DEV_VERSION);
   });
 
+  /**
+   * server.json repeats the version twice, and the MCP registry rejects a
+   * server whose version disagrees with the package it points at. The release
+   * workflow stamps both from the tag, so both have to be placeholders here.
+   */
+  it('server.json carries the placeholder in both places', async () => {
+    const server = await json<{ version: string; packages: { version: string }[] }>('server.json');
+    expect(server.version).toBe(DEV_VERSION);
+    expect(server.packages[0]?.version).toBe(DEV_VERSION);
+  });
+
+  /**
+   * The registry proves ownership by fetching the published package and
+   * matching its `mcpName` against the server name. A mismatch is only visible
+   * at publish time, which is after npm has already accepted the release.
+   */
+  it('the registry name matches the one the package claims', async () => {
+    const pkg = await json<{ mcpName: string; name: string }>('package.json');
+    const server = await json<{ name: string; packages: { identifier: string }[] }>('server.json');
+
+    expect(pkg.mcpName).toBe(server.name);
+    expect(server.packages[0]?.identifier).toBe(pkg.name);
+  });
+
   // npm ci refuses a lock file that disagrees with package.json, so a stale
   // version here breaks every install rather than just the release.
   it('the lock file agrees with it', async () => {

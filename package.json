@@ -1,6 +1,7 @@
 {
   "name": "keenetic-mcp",
   "version": "0.0.0-dev",
+  "mcpName": "io.github.salatmaster/keenetic-mcp",
   "description": "Control your Keenetic router from Claude, Codex, Cursor, or any MCP agent",
   "type": "module",
   "license": "MIT",

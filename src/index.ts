@@ -36,6 +36,13 @@ async function main(): Promise<void> {
   // credentials in .env instead of exporting them. A no-op once installed.
   loadLocalEnv();
 
+  // Before the config is read, so it answers on a machine that has never been
+  // set up. Every bug report starts by asking which version is running.
+  if (process.argv.includes('--version') || process.argv.includes('-v')) {
+    process.stdout.write(`${resolveVersion()}\n`);
+    return;
+  }
+
   // `init` is a subcommand rather than a second binary, so the published
   // surface stays a single command.
   if (process.argv[2] === 'init') {

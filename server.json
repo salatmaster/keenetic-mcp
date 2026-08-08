@@ -1,0 +1,43 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.salatmaster/keenetic-mcp",
+  "description": "Control a Keenetic router: devices, Wi-Fi, VPN routing, segments, safe verified writes.",
+  "repository": {
+    "url": "https://github.com/salatmaster/keenetic-mcp",
+    "source": "github"
+  },
+  "version": "0.0.0-dev",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "keenetic-mcp",
+      "version": "0.0.0-dev",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "KEENETIC_HOST",
+          "description": "Router address on the LAN, for example 192.168.1.1. Optional: `npx keenetic-mcp init` discovers it from the default gateway and stores it.",
+          "isRequired": false,
+          "isSecret": false,
+          "format": "string"
+        },
+        {
+          "name": "KEENETIC_USER",
+          "description": "Router login. Optional, defaults to admin.",
+          "isRequired": false,
+          "isSecret": false,
+          "format": "string"
+        },
+        {
+          "name": "KEENETIC_PASSWORD",
+          "description": "Router password. Optional: the setup wizard stores it in the operating system keychain instead. Use this in a container, where there is no keychain.",
+          "isRequired": false,
+          "isSecret": true,
+          "format": "string"
+        }
+      ]
+    }
+  ]
+}

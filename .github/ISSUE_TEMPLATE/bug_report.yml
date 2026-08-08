@@ -1,0 +1,49 @@
+name: Bug report
+description: Something behaves differently from what the documentation says
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please do not paste real MAC addresses, private IP addresses, SSIDs or
+        keys. Replace them with placeholders.
+
+  - type: input
+    id: model
+    attributes:
+      label: Router model and KeeneticOS version
+      description: >-
+        From `get_system_info`, or the bottom of the router. Almost every
+        difference in this project comes down to one of these two, so a report
+        without them usually cannot be acted on.
+      placeholder: Keenetic Ultra (KN-1811), KeeneticOS 5.1.3
+    validations:
+      required: true
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: >-
+        The tool you called, what it returned, and what you expected instead.
+        If a change reported success but did not take effect, say so plainly:
+        the router accepts some wrong commands silently, and that is the failure
+        this project cares about most.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: How to reproduce
+      placeholder: |
+        1. list_devices { "filter": "active" }
+        2. update_device { "mac": "02:00:00:00:00:01", "access": "deny" }
+        3. The response says applied, the device stays online
+
+  - type: input
+    id: version
+    attributes:
+      label: keenetic-mcp version
+      description: "`npx keenetic-mcp --version`"
+      placeholder: "0.3.0"

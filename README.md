@@ -180,6 +180,10 @@ KN-1621), Extra and Carrier (KN-1713, KN-1714, KN-1721), Ultra and Titan
 (KN-1810, KN-1811, KN-1812). Older hardware on 4.x and earlier has RCI too; the
 tool set adapts to the components each router actually has.
 
+Netcraze routers run the same firmware under their own brand and answer the
+same RCI. Verified read-only against a **Netcraze Speedster (NC-3013) on 5.2
+Beta 1**: the setup wizard, system info, internet status and the device list.
+
 ## How it works
 
 Keenetic routers expose RCI, a JSON mirror of their command-line tree, over

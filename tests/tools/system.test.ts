@@ -20,6 +20,15 @@ const CAPS = {
   features: new Set(['hwnat'])
 };
 
+/** The memory fields of tests/fixtures/show_system.json, captured from a real router. */
+const SHOW_SYSTEM = {
+  memory: '156044/524288',
+  memtotal: 524_288,
+  memfree: 297_508,
+  membuffers: 15_232,
+  memcache: 55_504
+};
+
 function contextWith(
   get: (path: string) => Promise<unknown>,
   getText: (path: string) => Promise<string> = async () => ''
@@ -94,6 +103,30 @@ describe('get_system_info', () => {
     expect(payload.firmware).toBe('5.1.3');
     expect(payload.components).toContain('wireguard');
     expect(payload.cpuLoad).toBe(6);
+  });
+
+  it('counts buffers and cache as available, matching the router used/total figure', async () => {
+    const { handlers } = capture(
+      contextWith(async path => {
+        if (path === 'show/system') return SHOW_SYSTEM;
+        throw new Error(`unexpected path ${path}`);
+      })
+    );
+
+    const payload = JSON.parse(textOf(await handlers['get_system_info']!({})));
+    const used = Number(SHOW_SYSTEM.memory.split('/')[0]);
+    expect(payload.memoryFreeKb).toBe(297_508);
+    expect(payload.memoryAvailableKb).toBe(297_508 + 15_232 + 55_504);
+    expect(payload.memoryTotalKb - payload.memoryAvailableKb).toBe(used);
+  });
+
+  it('reports available memory as null rather than guessing from a partial answer', async () => {
+    const { handlers } = capture(
+      contextWith(async () => ({ memtotal: 131_072, memfree: 15_360 }))
+    );
+
+    const payload = JSON.parse(textOf(await handlers['get_system_info']!({})));
+    expect(payload.memoryAvailableKb).toBeNull();
   });
 
   it('returns isError instead of throwing when the router is unreachable', async () => {

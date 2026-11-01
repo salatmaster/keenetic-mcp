@@ -12,6 +12,7 @@ type Handler = (args: Record<string, unknown>) => Promise<ToolResult>;
 
 const RUNNING_CHECKSUM = 'a1b2c3d4e5f60718293a4b5c6d7e8f90';
 const STALE_CHECKSUM = '0f9e8d7c6b5a49382716f5e4d3c2b1a0';
+const SAVED_CHECKSUM = '5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b';
 
 /** Startup config as the router serves it: the saved checksum is in the header. */
 const configText = (checksum: string) =>
@@ -23,28 +24,46 @@ const CONFIG = configText(STALE_CHECKSUM);
  * `unsavedAfter` models a save that never completes: the command is accepted
  * but the checksum in flash never catches up with the running one.
  *
+ * `lagPolls` models the write taking a while, the way a Netcraze Speedster
+ * on 5.2 Beta 1 does it: the date moves the moment the command is accepted,
+ * and only that many reads of show/last-change later do the running checksum
+ * and the one in flash both move to the saved value.
+ *
  * `fail-safe.unsaved` is deliberately pinned to false throughout, because that
  * is what a real 5.1.1 router reports even while a change sits unsaved. A save
  * check that believes that flag passes this harness while doing nothing.
  */
-function harness(opts: { unsavedAfter?: boolean; readOnly?: boolean } = {}) {
+function harness(opts: { unsavedAfter?: boolean; readOnly?: boolean; lagPolls?: number } = {}) {
   const posts: unknown[] = [];
+  let runningChecksum = RUNNING_CHECKSUM;
   let savedChecksum = STALE_CHECKSUM;
   let lastChangedAt = 'Fri, 7 Aug 2026 01:20:36 GMT';
+  let pollsUntilWritten: number | null = null;
 
-  const get = vi.fn(async () => ({
-    date: lastChangedAt,
-    user: 'admin',
-    checksum: RUNNING_CHECKSUM,
-    'fail-safe': { unsaved: false, rollback: false, 'time-left': 0 }
-  }));
+  const get = vi.fn(async () => {
+    if (pollsUntilWritten !== null) {
+      if (pollsUntilWritten === 0) {
+        runningChecksum = SAVED_CHECKSUM;
+        if (opts.unsavedAfter !== true) savedChecksum = SAVED_CHECKSUM;
+        pollsUntilWritten = null;
+      } else {
+        pollsUntilWritten -= 1;
+      }
+    }
+    return {
+      date: lastChangedAt,
+      user: 'admin',
+      checksum: runningChecksum,
+      'fail-safe': { unsaved: false, rollback: false, 'time-left': 0 }
+    };
+  });
   const getText = vi.fn(async () => configText(savedChecksum));
   const post = vi.fn(async (body: unknown) => {
     posts.push(body);
     // The router records the save either way; whether flash caught up is what
     // separates a real save from one that never landed.
     lastChangedAt = 'Fri, 7 Aug 2026 01:20:40 GMT';
-    if (opts.unsavedAfter !== true) savedChecksum = RUNNING_CHECKSUM;
+    pollsUntilWritten = opts.lagPolls ?? 0;
     return {};
   });
 
@@ -85,6 +104,15 @@ describe('save_config', () => {
     expect(posts).toContainEqual({ system: { configuration: { save: {} } } });
     expect(out.saved).toBe(true);
   });
+
+  // The date moves when the save starts. Confirming on that read flash before
+  // the write had finished and reported a save that landed as a failure.
+  it('waits for the write to finish, not just for the command to be accepted', async () => {
+    const { handlers, getText } = harness({ lagPolls: 4 });
+    const out = payload(await handlers['save_config']!({}));
+    expect(out.saved).toBe(true);
+    expect(getText).toHaveBeenCalledTimes(1);
+  }, 10_000);
 
   it('fails when the router still reports unsaved changes', async () => {
     const { handlers } = harness({ unsavedAfter: true });

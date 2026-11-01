@@ -55,9 +55,15 @@ export async function readLastChange(rci: Rci): Promise<LastChange> {
   };
 }
 
-/** True once the router has recorded something since `before` was taken. */
-export function lastChangeMoved(before: LastChange, after: LastChange): boolean {
-  return before.checksum !== after.checksum || before.date !== after.date;
+/**
+ * True once the running checksum has moved since `before` was taken.
+ *
+ * The date is not enough: on a save it moves as soon as the command is
+ * accepted, while startup-config.txt still holds the old checksum. The running
+ * checksum moves only when the write has finished.
+ */
+export function checksumMoved(before: LastChange, after: LastChange): boolean {
+  return before.checksum !== after.checksum;
 }
 
 /**

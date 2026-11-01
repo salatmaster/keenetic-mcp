@@ -2,7 +2,7 @@ import { writeFile } from 'node:fs/promises';
 import type { McpServer } from '@modelcontextprotocol/server';
 import * as z from 'zod/v4';
 import {
-  lastChangeMoved,
+  checksumMoved,
   readConfigState,
   readLastChange,
   STARTUP_CONFIG,
@@ -15,9 +15,12 @@ import { fail, guard, ok, READ_ONLY, type ToolContext, type ToolResult } from '.
  * tense, so the write may still be in flight. A single immediate check would
  * report a false failure; this polls briefly instead.
  *
- * The loop watches show/last-change, which is a small JSON document. The
- * confirmation reads startup-config.txt at about 17 KB, so it runs once at the
- * end rather than on every attempt.
+ * The loop watches the running checksum in show/last-change, which is a small
+ * JSON document. The date in the same document moves when the save starts, not
+ * when it ends: measured on a Netcraze Speedster (5.2 Beta 1), the date had
+ * moved within a second while flash still held the old checksum for several
+ * more. The confirmation reads startup-config.txt at about 17 KB, so it runs
+ * once at the end rather than on every attempt.
  *
  * Only an explicit `false` counts as saved. An unknown saved state resolves to
  * "not confirmed", so a failed read sends the caller to look rather than
@@ -26,11 +29,11 @@ import { fail, guard, ok, READ_ONLY, type ToolContext, type ToolResult } from '.
 async function waitForSaved(
   ctx: ToolContext,
   before: LastChange,
-  attempts = 5,
-  delayMs = 400
+  attempts = 30,
+  delayMs = 500
 ): Promise<boolean> {
   for (let attempt = 0; attempt < attempts; attempt += 1) {
-    if (lastChangeMoved(before, await readLastChange(ctx.client.rci))) break;
+    if (checksumMoved(before, await readLastChange(ctx.client.rci))) break;
     await new Promise(resolve => setTimeout(resolve, delayMs));
   }
   return (await readConfigState(ctx.client.rci)).unsavedChanges === false;

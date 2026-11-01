@@ -46,7 +46,7 @@ export async function runInit(deps: InitDeps): Promise<number> {
 
   const identified = await deps.identify(host);
   if (!identified) {
-    deps.out(`Nothing at ${host} looks like a Keenetic router.`);
+    deps.out(`Nothing at ${host} looks like a Keenetic or Netcraze router.`);
     deps.out('Check the address, and that this machine is on the same network.');
     return 1;
   }
@@ -60,7 +60,8 @@ export async function runInit(deps: InitDeps): Promise<number> {
     deps.out(`The router rejected those credentials (${result.reason}). Nothing was saved.`);
     return 1;
   }
-  deps.out(`${result.model}, KeeneticOS ${result.firmware}, ${result.components} components`);
+  // Not "KeeneticOS": Netcraze ships the same firmware under its own name.
+  deps.out(`${result.model}, firmware ${result.firmware}, ${result.components} components`);
 
   const path = await writeStoredConfig(deps.configDir, { host, login });
   const where = await deps.store.save(`${login}@${host}`, password);

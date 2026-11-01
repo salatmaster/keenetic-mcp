@@ -44,6 +44,24 @@ describe('runInit', () => {
     expect(out.join('\n')).toMatch(/5\.1\.3/);
   });
 
+  it('does not call a Netcraze firmware KeeneticOS', async () => {
+    const { deps, out } = await makeDeps({
+      identify: vi.fn(async () => ({ realm: 'Netcraze Speedster' })),
+      verify: vi.fn(async () => ({
+        ok: true as const,
+        model: 'Speedster (NC-3013)',
+        firmware: '5.2 Beta 1',
+        components: 27
+      }))
+    });
+    await expect(runInit(deps)).resolves.toBe(0);
+
+    const text = out.join('\n');
+    expect(text).toMatch(/Found Netcraze Speedster/);
+    expect(text).toMatch(/Speedster \(NC-3013\), firmware 5\.2 Beta 1/);
+    expect(text).not.toMatch(/KeeneticOS/);
+  });
+
   it('never prints the password', async () => {
     const { deps, out } = await makeDeps();
     await runInit(deps);

@@ -6,6 +6,18 @@ function asRecord(value: unknown): Record<string, unknown> {
   return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {};
 }
 
+/**
+ * `memfree` alone reads as an alarm: Linux fills idle RAM with page cache, so a
+ * healthy 128 MB router reports ~15 MB free. Buffers and cache are given back on
+ * demand, and the router's own `memory` field ("used/total") is computed the
+ * same way: total - free - buffers - cache.
+ */
+function availableKb(s: Record<string, unknown>): number | null {
+  const parts = [s['memfree'], s['membuffers'], s['memcache']];
+  if (!parts.every(part => typeof part === 'number')) return null;
+  return (parts as number[]).reduce((sum, part) => sum + part, 0);
+}
+
 export function registerSystemTools(server: McpServer, ctx: ToolContext): void {
   server.registerTool(
     'get_system_info',
@@ -14,7 +26,9 @@ export function registerSystemTools(server: McpServer, ctx: ToolContext): void {
       description:
         'Model, firmware version, uptime, CPU and memory load, and the list of installed ' +
         'KeeneticOS components. Call this first when you need to know what the router supports: ' +
-        'the component list tells you which features exist on this device.',
+        'the component list tells you which features exist on this device. ' +
+        'Judge memory pressure by memoryAvailableKb, not memoryFreeKb: free excludes the ' +
+        'page cache the kernel releases on demand, so it is always low on a healthy router.',
       inputSchema: {},
       annotations: READ_ONLY
     },
@@ -34,6 +48,7 @@ export function registerSystemTools(server: McpServer, ctx: ToolContext): void {
         cpuLoad: s['cpuload'] ?? null,
         memoryTotalKb: s['memtotal'] ?? null,
         memoryFreeKb: s['memfree'] ?? null,
+        memoryAvailableKb: availableKb(s),
         connectionsTotal: s['conntotal'] ?? null,
         connectionsFree: s['connfree'] ?? null,
         components: [...caps.components].sort(),

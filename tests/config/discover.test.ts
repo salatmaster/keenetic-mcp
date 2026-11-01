@@ -66,6 +66,16 @@ describe('identifyRouter', () => {
     );
   });
 
+  it('recognises a Netcraze, which answers with the same realm header', async () => {
+    const fetchImpl = vi.fn(
+      async () =>
+        new Response(null, { status: 401, headers: { 'X-NDM-Realm': 'Netcraze Speedster' } })
+    );
+    await expect(identifyRouter('192.0.2.1', fetchImpl as unknown as typeof fetch)).resolves.toEqual(
+      { realm: 'Netcraze Speedster' }
+    );
+  });
+
   it('returns null for something that is not a Keenetic', async () => {
     const fetchImpl = vi.fn(async () => new Response(null, { status: 401 }));
     await expect(

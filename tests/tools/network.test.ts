@@ -61,7 +61,7 @@ function harness(): Record<string, Handler> {
     return {} as never;
   }) as never);
 
-  registerNetworkTools(server, { client, maxResponseBytes: 25_000, readOnly: false, backup: stubBackup() });
+  registerNetworkTools(server, { client, host: '192.0.2.1', maxResponseBytes: 25_000, readOnly: false, backup: stubBackup() });
   return handlers;
 }
 

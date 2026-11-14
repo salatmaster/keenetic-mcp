@@ -71,6 +71,7 @@ async function main(): Promise<void> {
   });
   const ctx: ToolContext = {
     client,
+    host: config.host,
     maxResponseBytes: config.maxResponseBytes,
     readOnly: config.readOnly,
     backup: createBackupGuard(client.rci, config.host, () => new Date())

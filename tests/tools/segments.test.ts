@@ -76,6 +76,7 @@ function harness(opts: HarnessOptions = {}) {
 
   const ctx: ToolContext = {
     client,
+    host: '192.0.2.1',
     maxResponseBytes: 25_000,
     readOnly: opts.readOnly === true,
     backup: stubBackup()

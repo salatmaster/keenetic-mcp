@@ -1,6 +1,6 @@
-import { mkdtemp, readFile } from 'node:fs/promises';
+import { mkdtemp, readFile, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { McpServer } from '@modelcontextprotocol/server';
 import { registerConfigTools } from '../../src/tools/config.js';
@@ -74,6 +74,7 @@ function harness(opts: { unsavedAfter?: boolean; readOnly?: boolean; lagPolls?: 
 
   const ctx: ToolContext = {
     client,
+    host: '192.0.2.1',
     maxResponseBytes: 25_000,
     readOnly: opts.readOnly === true,
     backup: stubBackup()
@@ -143,22 +144,51 @@ describe('save_config', () => {
 });
 
 describe('backup_config', () => {
-  it('writes the startup config to the requested path', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'kn-'));
-    const target = join(dir, 'out.txt');
-    const { handlers } = harness();
-    const out = payload(await handlers['backup_config']!({ path: target }));
+  // writeBackup resolves the state dir from the environment; point it at a
+  // throwaway directory for each test.
+  async function withStateDir<T>(fn: (dir: string) => Promise<T>): Promise<T> {
+    const dir = await mkdtemp(join(tmpdir(), 'kn-state-'));
+    const previous = process.env['KEENETIC_STATE_DIR'];
+    process.env['KEENETIC_STATE_DIR'] = dir;
+    try {
+      return await fn(dir);
+    } finally {
+      if (previous === undefined) delete process.env['KEENETIC_STATE_DIR'];
+      else process.env['KEENETIC_STATE_DIR'] = previous;
+    }
+  }
 
-    expect(out.path).toBe(target);
-    expect(out.bytes).toBe(CONFIG.length);
-    await expect(readFile(target, 'utf8')).resolves.toBe(CONFIG);
+  it('writes into the backups directory with a timestamped name and 0600 permissions', async () => {
+    await withStateDir(async dir => {
+      const { handlers } = harness();
+      const out = payload(await handlers['backup_config']!({}));
+
+      expect(dirname(out.path)).toBe(join(dir, 'backups'));
+      expect(basename(out.path)).toMatch(/^192\.0\.2\.1-.+\.txt$/);
+      expect(out.bytes).toBe(Buffer.byteLength(CONFIG, 'utf8'));
+      await expect(readFile(out.path, 'utf8')).resolves.toBe(CONFIG);
+      await expect(stat(out.path).then(s => s.mode & 0o777)).resolves.toBe(0o600);
+    });
   });
 
-  it('reports a usable error when the directory does not exist', async () => {
+  it('accepts a plain filename, still inside the backups directory', async () => {
+    await withStateDir(async dir => {
+      const { handlers } = harness();
+      const out = payload(await handlers['backup_config']!({ filename: 'pre-change.txt' }));
+
+      expect(out.path).toBe(join(dir, 'backups', 'pre-change.txt'));
+      await expect(readFile(out.path, 'utf8')).resolves.toBe(CONFIG);
+    });
+  });
+
+  // The filename comes from the agent; traversal and separator characters
+  // must be refused.
+  it('rejects filenames that try to escape the backups directory', async () => {
     const { handlers } = harness();
-    const result = await handlers['backup_config']!({ path: '/nope/missing/out.txt' });
-    expect(result.isError).toBe(true);
-    expect(result.content.map(p => p.text).join('')).toMatch(/absolute path/i);
+    for (const hostile of ['../escape.txt', 'a/b.txt', '.hidden', ''])
+      await expect(handlers['backup_config']!({ filename: hostile })).resolves.toMatchObject({
+        isError: true
+      });
   });
 
   it('stays available in read-only mode, since reading changes nothing', () => {

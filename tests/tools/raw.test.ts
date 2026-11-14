@@ -14,7 +14,7 @@ function harness(readOnly = false, payload: unknown = { title: '5.1.3' }) {
     rci: { get, post, getText: vi.fn() },
     capabilities: vi.fn()
   } as unknown as KeeneticClient;
-  const ctx: ToolContext = { client, maxResponseBytes: 2_000, readOnly, backup: stubBackup() };
+  const ctx: ToolContext = { client, host: '192.0.2.1', maxResponseBytes: 2_000, readOnly, backup: stubBackup() };
 
   const server = new McpServer({ name: 'test', version: '0.0.0' });
   const handlers: Record<string, Handler> = {};

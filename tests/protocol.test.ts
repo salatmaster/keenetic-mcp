@@ -43,7 +43,7 @@ function context(readOnly: boolean): ToolContext {
       features: new Set<string>()
     }))
   } as unknown as KeeneticClient;
-  return { client, maxResponseBytes: 25_000, readOnly, backup: stubBackup() };
+  return { client, host: '192.0.2.1', maxResponseBytes: 25_000, readOnly, backup: stubBackup() };
 }
 
 /** Speaks real MCP to the assembled server over a linked in-memory transport. */

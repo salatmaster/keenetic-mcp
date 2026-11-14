@@ -111,7 +111,7 @@ Prefer environment variables? `KEENETIC_HOST`, `KEENETIC_USER` and
 | `get_system_info` | model, firmware, CPU, memory, installed components |
 | `get_config_state` | unsaved changes, who changed what and when |
 | `list_segments` | every bridge, and whether the web interface lists it as a segment |
-| `backup_config` | download the configuration to a local file |
+| `backup_config` | download the configuration into the tool's backups directory |
 
 **Change**
 

@@ -41,7 +41,7 @@ function harness(hotspotHost: Record<string, unknown>, showHost: Record<string, 
     taken: () => null
   };
 
-  const ctx: ToolContext = { client, maxResponseBytes: 25_000, readOnly: false, backup };
+  const ctx: ToolContext = { client, host: '192.0.2.1', maxResponseBytes: 25_000, readOnly: false, backup };
   const server = new McpServer({ name: 'test', version: '0.0.0' });
   const handlers: Record<string, Handler> = {};
   vi.spyOn(server, 'registerTool').mockImplementation(((

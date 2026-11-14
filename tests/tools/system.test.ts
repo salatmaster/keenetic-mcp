@@ -37,7 +37,7 @@ function contextWith(
     rci: { get, post: vi.fn(), getText },
     capabilities: async () => CAPS
   } as unknown as KeeneticClient;
-  return { client, maxResponseBytes: 25_000, readOnly: false, backup: stubBackup() };
+  return { client, host: '192.0.2.1', maxResponseBytes: 25_000, readOnly: false, backup: stubBackup() };
 }
 
 /** Registers the tools against a real McpServer with registerTool intercepted. */

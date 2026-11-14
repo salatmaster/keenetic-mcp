@@ -1,6 +1,4 @@
-import { writeFile } from 'node:fs/promises';
 import type { McpServer } from '@modelcontextprotocol/server';
-import * as z from 'zod/v4';
 import {
   checksumMoved,
   readConfigState,
@@ -8,6 +6,7 @@ import {
   STARTUP_CONFIG,
   type LastChange
 } from '../router/config-state.js';
+import { stateDir, writeBackup } from '../router/backup.js';
 import { fail, guard, ok, READ_ONLY, type ToolContext, type ToolResult } from './registry.js';
 
 /**
@@ -45,27 +44,27 @@ export function registerConfigTools(server: McpServer, ctx: ToolContext): void {
     {
       title: 'Download a configuration backup',
       description:
-        'Saves the router startup configuration to a local file. Take one before any ' +
+        "Saves the router startup configuration into this tool's backups directory " +
+        '(KEENETIC_STATE_DIR/backups) with owner-only file permissions. Take one before any ' +
         'sequence of changes so there is a known-good state to return to. Reading the ' +
         'configuration changes nothing on the router.',
-      inputSchema: {
-        path: z.string().describe('Absolute path of the local file to write.')
-      },
+      inputSchema: {},
+      // Read-only w.r.t. the router; the local file is confined to the
+      // backups directory, which is what keeps this annotation honest.
       annotations: READ_ONLY
     },
-    guard(async ({ path }): Promise<ToolResult> => {
+    guard(async (): Promise<ToolResult> => {
       const text = await ctx.client.rci.getText(STARTUP_CONFIG);
       try {
-        await writeFile(path, text, 'utf8');
+        return ok(await writeBackup(ctx.host, text, () => new Date()));
       } catch (error) {
         return fail(
           new Error(
-            `Could not write "${path}": ${(error as Error).message} ` +
-              'Give an absolute path in a directory that exists.'
+            `Could not write the backup: ${(error as Error).message} ` +
+              `It goes into ${stateDir(process.platform, process.env)}/backups.`
           )
         );
       }
-      return ok({ path, bytes: Buffer.byteLength(text, 'utf8') });
     })
   );
 

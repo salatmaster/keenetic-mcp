@@ -1,8 +1,8 @@
 import { mkdtemp, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createBackupGuard, stateDir } from '../../src/router/backup.js';
+import { createBackupGuard, stateDir, writeBackup } from '../../src/router/backup.js';
 import type { Rci } from '../../src/router/rci.js';
 
 const CONFIG = '! $$$ Model: Keenetic Model\nip hotspot\n';
@@ -97,4 +97,23 @@ describe('createBackupGuard', () => {
     await createBackupGuard(rciReturning(CONFIG, spy), '192.0.2.1', CLOCK).ensure();
     expect(spy).toHaveBeenCalledWith('/ci/startup-config.txt');
   });
+});
+
+describe('writeBackup', () => {
+  async function stateDirFor(label: string): Promise<string> {
+    const dir = await mkdtemp(join(tmpdir(), `kn-${label}-`));
+    vi.stubEnv('KEENETIC_STATE_DIR', dir);
+    return dir;
+  }
+
+  it('sanitizes the host before it becomes part of the file name', async () => {
+    const dir = await stateDirFor('host');
+    const out = await writeBackup('a/../b', CONFIG, CLOCK);
+
+    expect(dirname(out.path)).toBe(join(dir, 'backups'));
+    // The separators are gone: the name stays a single segment inside the dir.
+    expect(basename(out.path)).not.toMatch(/[/\\]/);
+    await expect(readFile(out.path, 'utf8')).resolves.toBe(CONFIG);
+  });
+
 });

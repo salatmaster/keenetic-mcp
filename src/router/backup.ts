@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, writeFile } from 'node:fs/promises';
 import { join, posix, win32 } from 'node:path';
 import { STARTUP_CONFIG } from './config-state.js';
 import type { Rci } from './rci.js';
@@ -34,6 +34,31 @@ export function stateDir(platform: NodeJS.Platform, env: NodeJS.ProcessEnv): str
   return posix.join(env['XDG_STATE_HOME'] ?? posix.join(home, '.local', 'state'), 'keenetic-mcp');
 }
 
+/**
+ * Writes one backup into the state directory's backups folder, owner-only.
+ * Shared by the backup guard and the backup_config tool so the two cannot
+ * drift apart.
+ *
+ * The caller picks neither the directory nor the name. A name chosen by the
+ * agent could overwrite the automatic pre-change backup, the one way back. The
+ * host comes from operator settings and is sanitized anyway, for the day it is
+ * not.
+ */
+export async function writeBackup(host: string, text: string, now: () => Date): Promise<BackupResult> {
+  const dir = join(stateDir(process.platform, process.env), 'backups');
+  await mkdir(dir, { recursive: true });
+
+  const createdAt = now().toISOString();
+  const stamp = createdAt.replace(/[:.]/g, '-');
+  const safeHost = host.replace(/[^A-Za-z0-9.-]/g, '_');
+  const path = join(dir, `${safeHost}-${stamp}.txt`);
+  await writeFile(path, text, { encoding: 'utf8', mode: 0o600 });
+  // Set explicitly: an existing file keeps its old mode through writeFile, and
+  // the startup config it holds contains password hashes and keys.
+  await chmod(path, 0o600);
+  return { path, bytes: Buffer.byteLength(text, 'utf8'), createdAt };
+}
+
 export function createBackupGuard(rci: Rci, host: string, now: () => Date): BackupGuard {
   let done: BackupResult | null = null;
   let pending: Promise<BackupResult> | null = null;
@@ -42,15 +67,7 @@ export function createBackupGuard(rci: Rci, host: string, now: () => Date): Back
     // startup-config, not running-config: the point is to capture the state a
     // reboot would return to.
     const text = await rci.getText(STARTUP_CONFIG);
-    const dir = join(stateDir(process.platform, process.env), 'backups');
-    await mkdir(dir, { recursive: true });
-
-    const createdAt = now().toISOString();
-    const stamp = createdAt.replace(/[:.]/g, '-');
-    const path = join(dir, `${host}-${stamp}.txt`);
-    await writeFile(path, text, 'utf8');
-
-    done = { path, bytes: Buffer.byteLength(text, 'utf8'), createdAt };
+    done = await writeBackup(host, text, now);
     return done;
   }
 

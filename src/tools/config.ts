@@ -1,5 +1,4 @@
 import type { McpServer } from '@modelcontextprotocol/server';
-import * as z from 'zod/v4';
 import {
   checksumMoved,
   readConfigState,
@@ -7,7 +6,7 @@ import {
   STARTUP_CONFIG,
   type LastChange
 } from '../router/config-state.js';
-import { SAFE_FILENAME, stateDir, writeBackup } from '../router/backup.js';
+import { stateDir, writeBackup } from '../router/backup.js';
 import { fail, guard, ok, READ_ONLY, type ToolContext, type ToolResult } from './registry.js';
 
 /**
@@ -49,21 +48,15 @@ export function registerConfigTools(server: McpServer, ctx: ToolContext): void {
         '(KEENETIC_STATE_DIR/backups) with owner-only file permissions. Take one before any ' +
         'sequence of changes so there is a known-good state to return to. Reading the ' +
         'configuration changes nothing on the router.',
-      inputSchema: {
-        filename: z
-          .string()
-          .regex(SAFE_FILENAME, 'letters, digits, spaces, dots, underscores and hyphens only')
-          .optional()
-          .describe('File name inside the backups directory; defaults to <host>-<timestamp>.txt.')
-      },
+      inputSchema: {},
       // Read-only w.r.t. the router; the local file is confined to the
       // backups directory, which is what keeps this annotation honest.
       annotations: READ_ONLY
     },
-    guard(async ({ filename }): Promise<ToolResult> => {
+    guard(async (): Promise<ToolResult> => {
       const text = await ctx.client.rci.getText(STARTUP_CONFIG);
       try {
-        return ok(await writeBackup(ctx.host, text, () => new Date(), filename));
+        return ok(await writeBackup(ctx.host, text, () => new Date()));
       } catch (error) {
         return fail(
           new Error(

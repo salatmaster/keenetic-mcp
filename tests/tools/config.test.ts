@@ -171,25 +171,6 @@ describe('backup_config', () => {
     });
   });
 
-  it('accepts a plain filename, still inside the backups directory', async () => {
-    await withStateDir(async dir => {
-      const { handlers } = harness();
-      const out = payload(await handlers['backup_config']!({ filename: 'pre-change.txt' }));
-
-      expect(out.path).toBe(join(dir, 'backups', 'pre-change.txt'));
-      await expect(readFile(out.path, 'utf8')).resolves.toBe(CONFIG);
-    });
-  });
-
-  // The filename comes from the agent; traversal and separator characters
-  // must be refused.
-  it('rejects filenames that try to escape the backups directory', async () => {
-    const { handlers } = harness();
-    for (const hostile of ['../escape.txt', 'a/b.txt', '.hidden', ''])
-      await expect(handlers['backup_config']!({ filename: hostile })).resolves.toMatchObject({
-        isError: true
-      });
-  });
 
   it('stays available in read-only mode, since reading changes nothing', () => {
     const { handlers } = harness({ readOnly: true });

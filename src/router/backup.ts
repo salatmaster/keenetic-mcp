@@ -35,42 +35,23 @@ export function stateDir(platform: NodeJS.Platform, env: NodeJS.ProcessEnv): str
 }
 
 /**
- * One path segment: no directories, no traversal. writeBackup() enforces
- * this itself; the export lets tool schemas advertise the same contract.
+ * Writes one backup into the state directory's backups folder, owner-only.
+ * Shared by the backup guard and the backup_config tool so the two cannot
+ * drift apart.
+ *
+ * The caller picks neither the directory nor the name. A name chosen by the
+ * agent could overwrite the automatic pre-change backup, the one way back. The
+ * host comes from operator settings and is sanitized anyway, for the day it is
+ * not.
  */
-export const SAFE_FILENAME = /^[A-Za-z0-9][A-Za-z0-9 ._-]{0,63}$/;
-
-/** Writing to these names on Windows goes to a device, not a file. */
-const WINDOWS_RESERVED = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(\.|$)/i;
-
-/**
- * Writes one backup file into the state directory's backups folder, with
- * owner-only permissions. Shared by the backup guard and the backup_config
- * tool so the two cannot drift apart. `filename` is validated here rather
- * than at the call sites: a future caller must not be able to aim the write
- * outside the backups directory. When `filename` is omitted, a timestamped
- * name built from the router host is used; the host comes from
- * operator-controlled settings and is sanitized anyway, for the day it is not.
- */
-export async function writeBackup(
-  host: string,
-  text: string,
-  now: () => Date,
-  filename?: string
-): Promise<BackupResult> {
-  if (filename !== undefined &&
-      (!SAFE_FILENAME.test(filename) || WINDOWS_RESERVED.test(filename))) {
-    throw new Error(
-      'Unsafe backup filename: use letters, digits, spaces, dots, underscores and hyphens.'
-    );
-  }
+export async function writeBackup(host: string, text: string, now: () => Date): Promise<BackupResult> {
   const dir = join(stateDir(process.platform, process.env), 'backups');
   await mkdir(dir, { recursive: true });
 
   const createdAt = now().toISOString();
   const stamp = createdAt.replace(/[:.]/g, '-');
   const safeHost = host.replace(/[^A-Za-z0-9.-]/g, '_');
-  const path = join(dir, filename ?? `${safeHost}-${stamp}.txt`);
+  const path = join(dir, `${safeHost}-${stamp}.txt`);
   await writeFile(path, text, { encoding: 'utf8', mode: 0o600 });
   // Set explicitly: an existing file keeps its old mode through writeFile, and
   // the startup config it holds contains password hashes and keys.

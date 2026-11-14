@@ -116,19 +116,4 @@ describe('writeBackup', () => {
     await expect(readFile(out.path, 'utf8')).resolves.toBe(CONFIG);
   });
 
-  it('rejects filenames that try to escape the backups directory', async () => {
-    await stateDirFor('escape');
-    for (const hostile of ['../escape.txt', 'a/b.txt', '.hidden', ''])
-      await expect(writeBackup('192.0.2.1', CONFIG, CLOCK, hostile)).rejects.toThrow(
-        /unsafe backup filename/i
-      );
-  });
-
-  it('rejects Windows reserved device names', async () => {
-    await stateDirFor('reserved');
-    for (const reserved of ['CON.txt', 'nul', 'com1.log'])
-      await expect(writeBackup('192.0.2.1', CONFIG, CLOCK, reserved)).rejects.toThrow(
-        /unsafe backup filename/i
-      );
-  });
 });

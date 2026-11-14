@@ -53,6 +53,13 @@ jobs:
           jq --arg v "$version" '.version = $v | .packages[0].version = $v' \
             server.json > server.tmp && mv server.tmp server.json
           echo "publishing $(node -p 'require("./package.json").version')"
+          # A prerelease (0.4.0-beta.1) goes out under `next` so that someone can
+          # test it with `npx keenetic-mcp@next`. Without --tag npm would make it
+          # `latest`, and every plain `npx keenetic-mcp` would pick it up.
+          case "$version" in
+            *-*) echo "NPM_DIST_TAG=next" >> "$GITHUB_ENV" ;;
+            *) echo "NPM_DIST_TAG=latest" >> "$GITHUB_ENV" ;;
+          esac
 
       # Provenance ties the tarball to this workflow run, so anyone can verify it
       # was built from this commit rather than someone's laptop.
@@ -60,24 +67,29 @@ jobs:
       # A misconfigured trusted publisher surfaces here as a misleading 404 or
       # ENEEDAUTH rather than a clear message. Check that the publisher on npm
       # names this repository and this workflow filename exactly.
-      - run: npm publish --provenance --access public
+      - run: npm publish --provenance --access public --tag "$NPM_DIST_TAG"
 
       # The registry indexes metadata only, and proves ownership by fetching the
       # published package and matching its `mcpName` against the server name. So
       # it has to run after npm, and it retries: npm accepts the publish before
-      # the package is queryable, and the first attempt can lose that race.
+      # the package is queryable. For 0.3.3 that took about 80 seconds, longer
+      # than four attempts 20 seconds apart, so it now waits up to five minutes.
       #
       # Authenticated by the same OIDC token as the npm publish above, so there
       # is still no secret stored anywhere.
+      #
+      # Skipped for a prerelease: the registry would list it as the latest
+      # version, and the directories would pick it up from there.
       - name: Publish to the MCP Registry
+        if: ${{ !contains(github.ref_name, '-') }}
         run: |
           curl -L "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" \
             | tar xz mcp-publisher
           ./mcp-publisher login github-oidc
-          for attempt in 1 2 3 4; do
+          for attempt in 1 2 3 4 5 6 7 8 9 10; do
             if ./mcp-publisher publish; then exit 0; fi
             echo "attempt $attempt failed, waiting for npm to catch up"
-            sleep 20
+            sleep 30
           done
           echo "the package is on npm but the registry would not take it"
           exit 1

@@ -110,3 +110,176 @@ describe('get_wifi_status', () => {
     expect(five.accessPoints[0].clients).toBe(0);
   });
 });
+
+type DiagnosticHarnessOptions = {
+  get?: (path: string) => Promise<unknown>;
+  post?: (body: unknown) => Promise<unknown>;
+};
+
+function diagnosticHarness(options: DiagnosticHarnessOptions = {}) {
+  const get = vi.fn(async (path: string): Promise<unknown> => {
+    if (options.get) return options.get(path);
+    throw new Error(`Unexpected GET: ${path}`);
+  });
+
+  const post = vi.fn(async (body: unknown): Promise<unknown> => {
+    if (options.post) return options.post(body);
+    return {};
+  });
+
+  const client = {
+    rci: { get, post, getText: vi.fn() },
+    capabilities: vi.fn()
+  } as unknown as KeeneticClient;
+
+  const server = new McpServer({ name: 'test', version: '0.0.0' });
+  const handlers: Record<string, Handler> = {};
+
+  vi.spyOn(server, 'registerTool').mockImplementation(((
+    name: string,
+    _config: unknown,
+    handler: Handler
+  ) => {
+    handlers[name] = handler;
+    return {} as never;
+  }) as never);
+
+  registerNetworkTools(server, {
+    client,
+    host: '192.0.2.1',
+    maxResponseBytes: 25_000,
+    readOnly: false,
+    backup: stubBackup()
+  });
+
+  return { handlers, get, post };
+}
+
+describe('ping', () => {
+  it('uses count=5 by default and polls until continued is false', async () => {
+    const h = diagnosticHarness({
+      post: async () => ({ message: ['PING started'], continued: true }),
+      get: async path => {
+        expect(path).toBe('tools/ping');
+        return { message: ['5 packets transmitted'], continued: false };
+      }
+    });
+
+    vi.useFakeTimers();
+    try {
+      const pending = h.handlers['ping']!({ host: '1.1.1.1' });
+      await vi.advanceTimersByTimeAsync(500);
+      const result = await pending;
+      const out = payload(result);
+
+      expect(h.post).toHaveBeenCalledWith({
+        tools: { ping: { host: '1.1.1.1', count: 5 } }
+      });
+      expect(h.get).toHaveBeenCalledTimes(1);
+      expect(out.lines).toEqual(['PING started', '5 packets transmitted']);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('continues polling when message is empty and continued is true', async () => {
+    let getNumber = 0;
+
+    const h = diagnosticHarness({
+      post: async () => ({ message: ['PING started'], continued: true }),
+      get: async () => {
+        getNumber++;
+        if (getNumber === 1) return { message: [], continued: true };
+        return { message: ['PING finished'], continued: false };
+      }
+    });
+
+    vi.useFakeTimers();
+    try {
+      const pending = h.handlers['ping']!({ host: '1.1.1.1' });
+      await vi.advanceTimersByTimeAsync(1000);
+      const result = await pending;
+      const out = payload(result);
+
+      expect(h.get).toHaveBeenCalledTimes(2);
+      expect(out.lines).toEqual(['PING started', 'PING finished']);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('passes count and source_interface to RCI', async () => {
+    const h = diagnosticHarness({
+      post: async () => ({ message: ['done'], continued: false })
+    });
+
+    await h.handlers['ping']!({
+      host: '1.1.1.1',
+      count: 3,
+      source_interface: 'Wireguard0'
+    });
+
+    expect(h.post).toHaveBeenCalledWith({
+      tools: {
+        ping: {
+          host: '1.1.1.1',
+          count: 3,
+          'source-interface': 'Wireguard0'
+        }
+      }
+    });
+    expect(h.get).not.toHaveBeenCalled();
+  });
+});
+
+describe('traceroute', () => {
+  it('sends an ICMP traceroute request', async () => {
+    const h = diagnosticHarness({
+      post: async () => ({ message: ['trace complete'], continued: false })
+    });
+
+    await h.handlers['traceroute']!({
+      host: '1.1.1.1',
+      source_interface: 'Wireguard1'
+    });
+
+    expect(h.post).toHaveBeenCalledWith({
+      tools: {
+        traceroute: {
+          host: '1.1.1.1',
+          type: 'icmp',
+          'source-interface': 'Wireguard1'
+        }
+      }
+    });
+    expect(h.get).not.toHaveBeenCalled();
+  });
+});
+
+describe('diagnostic polling errors', () => {
+  it('does not treat a GET 404 as successful completion', async () => {
+    const notFound = Object.assign(
+      new Error('this path does not exist on this firmware'),
+      { code: '404' }
+    );
+
+    const h = diagnosticHarness({
+      post: async () => ({ message: ['partial output'], continued: true }),
+      get: async () => {
+        throw notFound;
+      }
+    });
+
+    vi.useFakeTimers();
+    try {
+      const pending = h.handlers['ping']!({ host: '1.1.1.1' });
+      await vi.advanceTimersByTimeAsync(500);
+      const result = await pending;
+
+      expect(result.isError).toBe(true);
+      expect(h.get).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});

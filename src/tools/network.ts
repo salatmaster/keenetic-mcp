@@ -154,4 +154,112 @@ export function registerNetworkTools(server: McpServer, ctx: ToolContext): void 
       return ok({ bands, totalClients: stations.length });
     })
   );
+
+  const hostSchema = z
+    .string()
+    .min(1)
+    .max(253)
+    .regex(/^[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?$/, 'Invalid hostname or IPv4 address.')
+    .refine(value => !value.includes('..'), 'Invalid hostname.');
+
+  const sourceInterfaceSchema = z
+    .string()
+    .min(1)
+    .max(64)
+    .regex(/^[A-Za-z0-9_.-]+$/, 'Invalid interface name.')
+    .optional()
+    .describe('Any existing Keenetic interface name.');
+
+  function appendMessages(
+    target: string[],
+    response: unknown,
+    command: 'ping' | 'traceroute'
+  ): boolean {
+    const root = asRecord(response);
+    const nested = asRecord(asRecord(root['tools'])[command]);
+    const source = Object.keys(nested).length > 0 ? nested : root;
+
+    if (Array.isArray(source['message'])) {
+      for (const line of source['message']) {
+        if (typeof line === 'string') target.push(line);
+      }
+    }
+
+    return source['continued'] === true;
+  }
+
+  async function runDiagnostic(
+    command: 'ping' | 'traceroute',
+    args: Record<string, unknown>,
+    getPath: 'tools/ping' | 'tools/traceroute'
+  ) {
+    const response = await ctx.client.rci.post({ tools: { [command]: args } });
+    const lines: string[] = [];
+    let continued = appendMessages(lines, response, command);
+    let polls = 0;
+    const startedAt = Date.now();
+
+    while (continued && polls < 120 && Date.now() - startedAt < 60000) {
+      await new Promise(resolve => setTimeout(resolve, 500));
+      polls++;
+
+      const next = await ctx.client.rci.get(getPath);
+      continued = appendMessages(lines, next, command);
+    }
+
+    if (continued) {
+      const reason =
+        polls >= 120
+          ? 'достигнут предел 120 GET-запросов'
+          : 'достигнут временной предел 60 секунд';
+
+      lines.push(`[Опрос остановлен: ${reason}; выше приведена полученная часть результата.]`);
+    }
+
+    return ok({
+      command,
+      result: lines.join('\n'),
+      lines,
+      getRequests: polls
+    });
+  }
+
+  server.registerTool(
+    'ping',
+    {
+      title: 'Ping',
+      description: 'Send ICMP echo requests to a hostname or IPv4 address through the router. Supports a configurable packet count and source interface, and returns the collected ping output.',
+      inputSchema: {
+        host: hostSchema,
+        count: z.number().int().min(1).max(20).optional(),
+        source_interface: sourceInterfaceSchema
+      },
+      annotations: READ_ONLY
+    },
+    guard(async ({ host, count, source_interface }) => {
+      const args: Record<string, unknown> = { host, count: count ?? 5 };
+      if (source_interface) args['source-interface'] = source_interface;
+
+      return runDiagnostic('ping', args, 'tools/ping');
+    })
+  );
+
+  server.registerTool(
+    'traceroute',
+    {
+      title: 'Traceroute',
+      description: 'Trace the network path to a hostname or IPv4 address using ICMP probes. Supports selecting the source interface and returns the collected hop-by-hop traceroute output.',
+      inputSchema: {
+        host: hostSchema,
+        source_interface: sourceInterfaceSchema
+      },
+      annotations: READ_ONLY
+    },
+    guard(async ({ host, source_interface }) => {
+      const args: Record<string, unknown> = { host, type: 'icmp' };
+      if (source_interface) args['source-interface'] = source_interface;
+
+      return runDiagnostic('traceroute', args, 'tools/traceroute');
+    })
+  );
 }

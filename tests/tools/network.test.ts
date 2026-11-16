@@ -168,7 +168,7 @@ describe('ping', () => {
     vi.useFakeTimers();
     try {
       const pending = h.handlers['ping']!({ host: '1.1.1.1' });
-      await vi.advanceTimersByTimeAsync(500);
+      await vi.advanceTimersByTimeAsync(1000);
       const result = await pending;
       const out = payload(result);
 
@@ -177,6 +177,8 @@ describe('ping', () => {
       });
       expect(h.get).toHaveBeenCalledTimes(1);
       expect(out.lines).toEqual(['PING started', '5 packets transmitted']);
+      expect(out).not.toHaveProperty('result');
+      expect(out).not.toHaveProperty('getRequests');
     } finally {
       vi.useRealTimers();
     }
@@ -197,7 +199,7 @@ describe('ping', () => {
     vi.useFakeTimers();
     try {
       const pending = h.handlers['ping']!({ host: '1.1.1.1' });
-      await vi.advanceTimersByTimeAsync(1000);
+      await vi.advanceTimersByTimeAsync(2000);
       const result = await pending;
       const out = payload(result);
 
@@ -248,11 +250,106 @@ describe('traceroute', () => {
         traceroute: {
           host: '1.1.1.1',
           type: 'icmp',
+          'max-ttl': 30,
           'source-interface': 'Wireguard1'
         }
       }
     });
     expect(h.get).not.toHaveBeenCalled();
+  });
+
+  it('passes source_address to RCI', async () => {
+    const h = diagnosticHarness({
+      post: async () => ({ message: ['trace complete'], continued: false })
+    });
+
+    await h.handlers['traceroute']!({
+      host: '185.178.210.201',
+      source_address: '192.0.2.10'
+    });
+
+    expect(h.post).toHaveBeenCalledWith({
+      tools: {
+        traceroute: {
+          host: '185.178.210.201',
+          type: 'icmp',
+          'max-ttl': 30,
+          'source-address': '192.0.2.10'
+        }
+      }
+    });
+  });
+
+  it('passes source_address and source_interface together', async () => {
+    const h = diagnosticHarness({
+      post: async () => ({ message: ['trace complete'], continued: false })
+    });
+
+    await h.handlers['traceroute']!({
+      host: '185.178.210.201',
+      source_interface: 'Wireguard0',
+      source_address: '192.0.2.10'
+    });
+
+    expect(h.post).toHaveBeenCalledWith({
+      tools: {
+        traceroute: {
+          host: '185.178.210.201',
+          type: 'icmp',
+          'max-ttl': 30,
+          'source-interface': 'Wireguard0',
+          'source-address': '192.0.2.10'
+        }
+      }
+    });
+  });
+  it('passes custom max_hops to RCI', async () => {
+    const h = diagnosticHarness({
+      post: async () => ({ message: ['trace complete'], continued: false })
+    });
+
+    await h.handlers['traceroute']!({
+      host: '1.1.1.1',
+      max_hops: 5
+    });
+
+    expect(h.post).toHaveBeenCalledWith({
+      tools: {
+        traceroute: {
+          host: '1.1.1.1',
+          type: 'icmp',
+          'max-ttl': 5
+        }
+      }
+    });
+  });
+
+  it('uses hop-based polling limits', async () => {
+    const h = diagnosticHarness({
+      post: async () => ({ message: ['trace started'], continued: true }),
+      get: async () => ({ message: [], continued: true })
+    });
+
+    vi.useFakeTimers();
+
+    try {
+      const pending = h.handlers['traceroute']!({
+        host: '1.1.1.1',
+        max_hops: 5
+      });
+
+      await vi.advanceTimersByTimeAsync(15_000);
+
+      const result = await pending;
+      const out = payload(result);
+
+      expect(h.get).toHaveBeenCalledTimes(15);
+      expect(out.lines).toContain(
+        '[Polling stopped: the 15-second time limit was reached; partial output is shown above.]'
+      );
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
@@ -273,7 +370,7 @@ describe('diagnostic polling errors', () => {
     vi.useFakeTimers();
     try {
       const pending = h.handlers['ping']!({ host: '1.1.1.1' });
-      await vi.advanceTimersByTimeAsync(500);
+      await vi.advanceTimersByTimeAsync(1000);
       const result = await pending;
 
       expect(result.isError).toBe(true);

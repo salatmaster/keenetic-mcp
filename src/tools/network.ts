@@ -170,6 +170,19 @@ export function registerNetworkTools(server: McpServer, ctx: ToolContext): void 
     .optional()
     .describe('Any existing Keenetic interface name.');
 
+  const sourceAddressSchema = z
+    .ipv4()
+    .optional()
+    .describe('IPv4 address to use as the source address for traceroute.');
+
+  const maxHopsSchema = z
+    .number()
+    .int()
+    .min(1)
+    .max(255)
+    .optional()
+    .describe('Maximum number of traceroute hops (1-255, default: 30).');
+
   function appendMessages(
     target: string[],
     response: unknown,
@@ -191,16 +204,27 @@ export function registerNetworkTools(server: McpServer, ctx: ToolContext): void 
   async function runDiagnostic(
     command: 'ping' | 'traceroute',
     args: Record<string, unknown>,
-    getPath: 'tools/ping' | 'tools/traceroute'
+    getPath: 'tools/ping' | 'tools/traceroute',
+    options?: {
+      maxPolls?: number;
+      timeoutMs?: number;
+    }
   ) {
+    const maxPolls = options?.maxPolls ?? 120;
+    const timeoutMs = options?.timeoutMs ?? 60000;
+
     const response = await ctx.client.rci.post({ tools: { [command]: args } });
     const lines: string[] = [];
     let continued = appendMessages(lines, response, command);
     let polls = 0;
     const startedAt = Date.now();
 
-    while (continued && polls < 120 && Date.now() - startedAt < 60000) {
-      await new Promise(resolve => setTimeout(resolve, 500));
+    while (
+      continued &&
+      polls < maxPolls &&
+      Date.now() - startedAt < timeoutMs
+    ) {
+      await new Promise(resolve => setTimeout(resolve, 1000));
       polls++;
 
       const next = await ctx.client.rci.get(getPath);
@@ -209,18 +233,16 @@ export function registerNetworkTools(server: McpServer, ctx: ToolContext): void 
 
     if (continued) {
       const reason =
-        polls >= 120
-          ? 'достигнут предел 120 GET-запросов'
-          : 'достигнут временной предел 60 секунд';
+        polls >= maxPolls
+          ? `the ${maxPolls} GET request limit was reached`
+          : `the ${timeoutMs / 1000}-second time limit was reached`;
 
-      lines.push(`[Опрос остановлен: ${reason}; выше приведена полученная часть результата.]`);
+      lines.push(`[Polling stopped: ${reason}; partial output is shown above.]`);
     }
 
     return ok({
       command,
-      result: lines.join('\n'),
-      lines,
-      getRequests: polls
+      lines
     });
   }
 
@@ -248,18 +270,31 @@ export function registerNetworkTools(server: McpServer, ctx: ToolContext): void 
     'traceroute',
     {
       title: 'Traceroute',
-      description: 'Trace the network path to a hostname or IPv4 address using ICMP probes. Supports selecting the source interface and returns the collected hop-by-hop traceroute output.',
+      description: 'Trace the network path to a hostname or IPv4 address using ICMP probes. Supports selecting the source interface, source IPv4 address, and maximum number of hops (default: 30). Returns the collected hop-by-hop traceroute output.',
       inputSchema: {
         host: hostSchema,
-        source_interface: sourceInterfaceSchema
+        source_interface: sourceInterfaceSchema,
+        source_address: sourceAddressSchema,
+        max_hops: maxHopsSchema
       },
       annotations: READ_ONLY
     },
-    guard(async ({ host, source_interface }) => {
-      const args: Record<string, unknown> = { host, type: 'icmp' };
-      if (source_interface) args['source-interface'] = source_interface;
+    guard(async ({ host, source_interface, source_address, max_hops }) => {
+      const hops = max_hops ?? 30;
 
-      return runDiagnostic('traceroute', args, 'tools/traceroute');
+      const args: Record<string, unknown> = {
+        host,
+        type: 'icmp',
+        'max-ttl': hops
+      };
+
+      if (source_interface) args['source-interface'] = source_interface;
+      if (source_address) args['source-address'] = source_address;
+
+      return runDiagnostic('traceroute', args, 'tools/traceroute', {
+        maxPolls: hops * 4,
+        timeoutMs: hops * 3000
+      });
     })
   );
 }

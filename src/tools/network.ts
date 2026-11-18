@@ -179,9 +179,9 @@ export function registerNetworkTools(server: McpServer, ctx: ToolContext): void 
     .number()
     .int()
     .min(1)
-    .max(255)
+    .max(64)
     .optional()
-    .describe('Maximum number of traceroute hops (1-255, default: 30).');
+    .describe('Maximum number of traceroute hops (1-64, default: 30).');
 
   function appendMessages(
     target: string[],
@@ -293,7 +293,9 @@ export function registerNetworkTools(server: McpServer, ctx: ToolContext): void 
 
       return runDiagnostic('traceroute', args, 'tools/traceroute', {
         maxPolls: hops * 4,
-        timeoutMs: hops * 3000
+        // About 3 s per hop on a real router, but a tool call that runs past
+        // a minute is one most MCP clients have already given up on.
+        timeoutMs: Math.min(hops * 3000, 60_000)
       });
     })
   );

@@ -353,6 +353,29 @@ describe('traceroute', () => {
   });
 });
 
+describe('traceroute limits', () => {
+  it('stops after 60 seconds however many hops were asked for', async () => {
+    const h = diagnosticHarness({
+      post: async () => ({ message: ['trace started'], continued: true }),
+      get: async () => ({ message: [], continued: true })
+    });
+
+    vi.useFakeTimers();
+    try {
+      const pending = h.handlers['traceroute']!({ host: '1.1.1.1', max_hops: 64 });
+      await vi.advanceTimersByTimeAsync(61_000);
+      const out = payload(await pending);
+
+      expect(h.get.mock.calls.length).toBeLessThanOrEqual(60);
+      expect(out.lines).toContain(
+        '[Polling stopped: the 60-second time limit was reached; partial output is shown above.]'
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
 describe('diagnostic polling errors', () => {
   it('does not treat a GET 404 as successful completion', async () => {
     const notFound = Object.assign(

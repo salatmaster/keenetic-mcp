@@ -154,4 +154,149 @@ export function registerNetworkTools(server: McpServer, ctx: ToolContext): void 
       return ok({ bands, totalClients: stations.length });
     })
   );
+
+  const hostSchema = z
+    .string()
+    .min(1)
+    .max(253)
+    .regex(/^[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?$/, 'Invalid hostname or IPv4 address.')
+    .refine(value => !value.includes('..'), 'Invalid hostname.');
+
+  const sourceInterfaceSchema = z
+    .string()
+    .min(1)
+    .max(64)
+    .regex(/^[A-Za-z0-9_.-]+$/, 'Invalid interface name.')
+    .optional()
+    .describe('Any existing Keenetic interface name.');
+
+  const sourceAddressSchema = z
+    .ipv4()
+    .optional()
+    .describe('IPv4 address to use as the source address for traceroute.');
+
+  const maxHopsSchema = z
+    .number()
+    .int()
+    .min(1)
+    .max(64)
+    .optional()
+    .describe('Maximum number of traceroute hops (1-64, default: 30).');
+
+  function appendMessages(
+    target: string[],
+    response: unknown,
+    command: 'ping' | 'traceroute'
+  ): boolean {
+    const root = asRecord(response);
+    const nested = asRecord(asRecord(root['tools'])[command]);
+    const source = Object.keys(nested).length > 0 ? nested : root;
+
+    if (Array.isArray(source['message'])) {
+      for (const line of source['message']) {
+        if (typeof line === 'string') target.push(line);
+      }
+    }
+
+    return source['continued'] === true;
+  }
+
+  async function runDiagnostic(
+    command: 'ping' | 'traceroute',
+    args: Record<string, unknown>,
+    getPath: 'tools/ping' | 'tools/traceroute',
+    options?: {
+      maxPolls?: number;
+      timeoutMs?: number;
+    }
+  ) {
+    const maxPolls = options?.maxPolls ?? 120;
+    const timeoutMs = options?.timeoutMs ?? 60000;
+
+    const response = await ctx.client.rci.post({ tools: { [command]: args } });
+    const lines: string[] = [];
+    let continued = appendMessages(lines, response, command);
+    let polls = 0;
+    const startedAt = Date.now();
+
+    while (
+      continued &&
+      polls < maxPolls &&
+      Date.now() - startedAt < timeoutMs
+    ) {
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      polls++;
+
+      const next = await ctx.client.rci.get(getPath);
+      continued = appendMessages(lines, next, command);
+    }
+
+    if (continued) {
+      const reason =
+        polls >= maxPolls
+          ? `the ${maxPolls} GET request limit was reached`
+          : `the ${timeoutMs / 1000}-second time limit was reached`;
+
+      lines.push(`[Polling stopped: ${reason}; partial output is shown above.]`);
+    }
+
+    return ok({
+      command,
+      lines
+    });
+  }
+
+  server.registerTool(
+    'ping',
+    {
+      title: 'Ping',
+      description: 'Send ICMP echo requests to a hostname or IPv4 address through the router. Supports a configurable packet count and source interface, and returns the collected ping output.',
+      inputSchema: {
+        host: hostSchema,
+        count: z.number().int().min(1).max(20).optional(),
+        source_interface: sourceInterfaceSchema
+      },
+      annotations: READ_ONLY
+    },
+    guard(async ({ host, count, source_interface }) => {
+      const args: Record<string, unknown> = { host, count: count ?? 5 };
+      if (source_interface) args['source-interface'] = source_interface;
+
+      return runDiagnostic('ping', args, 'tools/ping');
+    })
+  );
+
+  server.registerTool(
+    'traceroute',
+    {
+      title: 'Traceroute',
+      description: 'Trace the network path to a hostname or IPv4 address using ICMP probes. Supports selecting the source interface, source IPv4 address, and maximum number of hops (default: 30). Returns the collected hop-by-hop traceroute output.',
+      inputSchema: {
+        host: hostSchema,
+        source_interface: sourceInterfaceSchema,
+        source_address: sourceAddressSchema,
+        max_hops: maxHopsSchema
+      },
+      annotations: READ_ONLY
+    },
+    guard(async ({ host, source_interface, source_address, max_hops }) => {
+      const hops = max_hops ?? 30;
+
+      const args: Record<string, unknown> = {
+        host,
+        type: 'icmp',
+        'max-ttl': hops
+      };
+
+      if (source_interface) args['source-interface'] = source_interface;
+      if (source_address) args['source-address'] = source_address;
+
+      return runDiagnostic('traceroute', args, 'tools/traceroute', {
+        maxPolls: hops * 4,
+        // About 3 s per hop on a real router, but a tool call that runs past
+        // a minute is one most MCP clients have already given up on.
+        timeoutMs: Math.min(hops * 3000, 60_000)
+      });
+    })
+  );
 }

@@ -21,7 +21,9 @@ const READ_TOOLS = [
   'list_interfaces',
   'list_policies',
   'list_routes',
-  'list_segments'
+  'list_segments',
+  'ping',
+  'traceroute'
 ];
 
 const WRITE_TOOLS = [

@@ -106,6 +106,8 @@ Prefer environment variables? `KEENETIC_HOST`, `KEENETIC_USER` and
 | `get_interface` | one interface in full, including WireGuard peers |
 | `get_wifi_status` | radios by band, with client counts |
 | `get_internet_status` | reachability, and which check failed |
+| `ping` | send ICMP echo requests, with an optional source interface |
+| `traceroute` | trace the network path using ICMP probes, with optional source interface, source address, and maximum hop count |
 | `list_routes` | routing table, or just the default route |
 | `list_policies` | connection policies for selective routing |
 | `get_system_info` | model, firmware, CPU, memory, installed components |

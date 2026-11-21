@@ -186,6 +186,11 @@ Netcraze routers run the same firmware under their own brand and answer the
 same RCI. Verified read-only against a **Netcraze Speedster (NC-3013) on 5.2
 Beta 1**: the setup wizard, system info, internet status and the device list.
 
+Firmware 5.2 changed the login: newer 5.2 builds accept only ndw4, which needs
+**Node 24.7 or later**. On older Node the server falls back to the old login,
+which 5.1 still accepts and 5.2 may not. Verified on a **Keenetic Hopper
+(KN-3810) on 5.2 Beta 4**.
+
 ## How it works
 
 Keenetic routers expose RCI, a JSON mirror of their command-line tree, over

@@ -38,7 +38,7 @@ function harness(initial: 'up' | 'down', obeys = true, readOnly = false) {
 
   const ctx: ToolContext = {
     client,
-    host: '192.0.2.1',
+    backupName: '192.0.2.1',
     maxResponseBytes: 25_000,
     readOnly,
     backup: stubBackup()

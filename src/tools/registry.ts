@@ -5,8 +5,8 @@ import { capText } from '../shape/budget.js';
 
 export interface ToolContext {
   client: KeeneticClient;
-  /** Router address, for naming backup files. */
-  host: string;
+  /** Starts every backup file name: the router address, after the profile name if any. */
+  backupName: string;
   maxResponseBytes: number;
   readOnly: boolean;
   /** Snapshots the startup config once, before the first mutating call. */

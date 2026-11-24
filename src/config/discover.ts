@@ -59,35 +59,79 @@ export function configDir(platform: NodeJS.Platform, env: NodeJS.ProcessEnv): st
   return posix.join(env['XDG_CONFIG_HOME'] ?? posix.join(home, '.config'), 'keenetic-mcp');
 }
 
-export interface StoredConfig {
+/** One router as `init` saved it. The password is in the keychain, not here. */
+export interface StoredRouter {
   host: string;
   login: string;
 }
 
+/**
+ * Everything config.json holds: the router `init` set up without a profile,
+ * kept at the top level where 0.4 put it, and any named ones under `profiles`.
+ */
+export interface StoredConfig {
+  router: StoredRouter | null;
+  profiles: Record<string, StoredRouter>;
+}
+
 const FILE = 'config.json';
 
-export async function readStoredConfig(dir: string): Promise<StoredConfig | null> {
+function asRouter(value: unknown): StoredRouter | null {
+  const v = value as Partial<StoredRouter> | null;
+  if (typeof v?.host !== 'string' || typeof v.login !== 'string') return null;
+  return { host: v.host, login: v.login };
+}
+
+async function readFileObject(dir: string): Promise<Record<string, unknown>> {
   try {
-    const parsed = JSON.parse(await readFile(join(dir, FILE), 'utf8')) as Partial<StoredConfig>;
-    if (typeof parsed.host !== 'string' || typeof parsed.login !== 'string') return null;
-    return { host: parsed.host, login: parsed.login };
+    const parsed: unknown = JSON.parse(await readFile(join(dir, FILE), 'utf8'));
+    return typeof parsed === 'object' && parsed !== null ? (parsed as Record<string, unknown>) : {};
   } catch {
-    return null;
+    return {};
   }
 }
 
+export async function readStoredConfig(dir: string): Promise<StoredConfig> {
+  const raw = await readFileObject(dir);
+  const entries =
+    typeof raw['profiles'] === 'object' && raw['profiles'] !== null
+      ? Object.entries(raw['profiles'])
+      : [];
+  // fromEntries defines own properties, so a "__proto__" key stays a key.
+  const profiles = Object.fromEntries(
+    entries.flatMap(([name, value]) => {
+      const router = asRouter(value);
+      return router ? [[name, router] as const] : [];
+    })
+  );
+  return { router: asRouter(raw), profiles };
+}
+
 /**
- * JSON rather than TOML: Node has no built-in parser and three fields do not
- * justify a dependency. The password is never written here; it lives in the
- * keychain, keyed by `login@host`.
+ * Saves one router, as the default or under a profile, and leaves every other
+ * entry in the file as it was: setting up the parents' router must not forget
+ * the home one.
+ *
+ * JSON rather than TOML: Node has no built-in parser and a handful of fields do
+ * not justify a dependency. The password is never written here; it lives in the
+ * keychain.
  */
-export async function writeStoredConfig(dir: string, config: StoredConfig): Promise<string> {
+export async function writeStoredRouter(
+  dir: string,
+  router: StoredRouter,
+  profile?: string
+): Promise<string> {
+  const raw = await readFileObject(dir);
+  const entry = { host: router.host, login: router.login };
+  if (profile) {
+    const profiles =
+      typeof raw['profiles'] === 'object' && raw['profiles'] !== null ? raw['profiles'] : {};
+    raw['profiles'] = { ...profiles, [profile]: entry };
+  } else {
+    Object.assign(raw, entry);
+  }
   await mkdir(dir, { recursive: true });
   const path = join(dir, FILE);
-  await writeFile(
-    path,
-    `${JSON.stringify({ host: config.host, login: config.login }, null, 2)}\n`,
-    'utf8'
-  );
+  await writeFile(path, `${JSON.stringify(raw, null, 2)}\n`, 'utf8');
   return path;
 }

@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { runInit, type InitDeps } from '../../src/cli/init.js';
-import { readStoredConfig } from '../../src/config/discover.js';
+import { readStoredConfig, writeStoredRouter } from '../../src/config/discover.js';
 
 async function makeDeps(
   over: Partial<InitDeps> = {}
@@ -12,6 +12,7 @@ async function makeDeps(
   const out: string[] = [];
   const deps: InitDeps = {
     configDir: dir,
+    profile: null,
     prompt: vi.fn(async () => ''),
     hidden: vi.fn(async () => 'hunter2'),
     out: line => out.push(line),
@@ -38,7 +39,10 @@ describe('runInit', () => {
     const { deps, out, dir } = await makeDeps();
     await expect(runInit(deps)).resolves.toBe(0);
 
-    await expect(readStoredConfig(dir)).resolves.toEqual({ host: '192.0.2.1', login: 'admin' });
+    await expect(readStoredConfig(dir)).resolves.toEqual({
+      router: { host: '192.0.2.1', login: 'admin' },
+      profiles: {}
+    });
     expect(deps.store.save).toHaveBeenCalledWith('admin@192.0.2.1', 'hunter2');
     expect(out.join('\n')).toMatch(/Keenetic Ultra \(KN-1811\)/);
     expect(out.join('\n')).toMatch(/5\.1\.3/);
@@ -91,7 +95,7 @@ describe('runInit', () => {
     });
     await expect(runInit(deps)).resolves.toBe(1);
     expect(deps.store.save).not.toHaveBeenCalled();
-    await expect(readStoredConfig(dir)).resolves.toBeNull();
+    await expect(readStoredConfig(dir)).resolves.toEqual({ router: null, profiles: {} });
     expect(out.join('\n')).toMatch(/rejected|401/i);
   });
 
@@ -131,5 +135,29 @@ describe('runInit', () => {
     });
     await runInit(deps);
     expect(order).toEqual(['verify', 'save']);
+  });
+
+  // Issue #26: a second router at the same address with the same login must
+  // not overwrite the first one's password or settings.
+  it('saves a profile next to the default router, under its own keychain account', async () => {
+    const { deps, out, dir } = await makeDeps({ profile: 'parents' });
+    await writeStoredRouter(dir, { host: '192.0.2.1', login: 'admin' });
+
+    await expect(runInit(deps)).resolves.toBe(0);
+
+    expect(deps.store.save).toHaveBeenCalledWith('parents:admin@192.0.2.1', 'hunter2');
+    await expect(readStoredConfig(dir)).resolves.toEqual({
+      router: { host: '192.0.2.1', login: 'admin' },
+      profiles: { parents: { host: '192.0.2.1', login: 'admin' } }
+    });
+    const text = out.join('\n');
+    expect(text).toMatch(/Setting up profile "parents"/);
+    expect(text).toMatch(/"KEENETIC_PROFILE": "parents"/);
+  });
+
+  it('does not talk about profiles when none was asked for', async () => {
+    const { deps, out } = await makeDeps();
+    await runInit(deps);
+    expect(out.join('\n')).not.toMatch(/profile/i);
   });
 });

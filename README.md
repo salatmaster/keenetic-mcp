@@ -98,6 +98,18 @@ tries the password against it and puts the password in the operating system keyc
 bring four skills that teach the agent how the router really behaves. In a container, set
 `KEENETIC_HOST`, `KEENETIC_USER` and `KEENETIC_PASSWORD` instead.
 
+**Several routers.** Home, your parents' and the office can all sit at `192.168.1.1` with the login
+`admin`. Give each one a name with `npx -y keenetic-mcp init --profile parents`, and choose which one a
+session talks to with `KEENETIC_PROFILE`. For one Claude Code project, that is a line in its
+`.claude/settings.local.json`:
+
+```json
+{ "env": { "KEENETIC_PROFILE": "parents" } }
+```
+
+Without a profile the server uses the router `init` set up without one. Other clients can pass
+`--profile parents` in the server's `args`, or set `KEENETIC_PROFILE` in its `env`.
+
 ## What to ask
 
 **Routing**

@@ -56,7 +56,7 @@ export function registerConfigTools(server: McpServer, ctx: ToolContext): void {
     guard(async (): Promise<ToolResult> => {
       const text = await ctx.client.rci.getText(STARTUP_CONFIG);
       try {
-        return ok(await writeBackup(ctx.host, text, () => new Date()));
+        return ok(await writeBackup(ctx.backupName, text, () => new Date()));
       } catch (error) {
         return fail(
           new Error(

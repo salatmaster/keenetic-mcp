@@ -72,7 +72,7 @@ function harness(get: (path: string) => Promise<unknown> = async () => INTERFACE
     rci: { get: spy, post: postSpy, getText: vi.fn() },
     capabilities: vi.fn()
   } as unknown as KeeneticClient;
-  const ctx: ToolContext = { client, host: '192.0.2.1', maxResponseBytes: 25_000, readOnly: false, backup: stubBackup() };
+  const ctx: ToolContext = { client, backupName: '192.0.2.1', maxResponseBytes: 25_000, readOnly: false, backup: stubBackup() };
 
   const server = new McpServer({ name: 'test', version: '0.0.0' });
   const handlers: Record<string, Handler> = {};

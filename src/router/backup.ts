@@ -39,19 +39,19 @@ export function stateDir(platform: NodeJS.Platform, env: NodeJS.ProcessEnv): str
  * Shared by the backup guard and the backup_config tool so the two cannot
  * drift apart.
  *
- * The caller picks neither the directory nor the name. A name chosen by the
+ * The agent picks neither the directory nor the name. A name chosen by the
  * agent could overwrite the automatic pre-change backup, the one way back. The
- * host comes from operator settings and is sanitized anyway, for the day it is
- * not.
+ * name comes from operator settings, the router address and profile, and is
+ * sanitized anyway, for the day it is not.
  */
-export async function writeBackup(host: string, text: string, now: () => Date): Promise<BackupResult> {
+export async function writeBackup(name: string, text: string, now: () => Date): Promise<BackupResult> {
   const dir = join(stateDir(process.platform, process.env), 'backups');
   await mkdir(dir, { recursive: true });
 
   const createdAt = now().toISOString();
   const stamp = createdAt.replace(/[:.]/g, '-');
-  const safeHost = host.replace(/[^A-Za-z0-9.-]/g, '_');
-  const path = join(dir, `${safeHost}-${stamp}.txt`);
+  const safeName = name.replace(/[^A-Za-z0-9.-]/g, '_');
+  const path = join(dir, `${safeName}-${stamp}.txt`);
   await writeFile(path, text, { encoding: 'utf8', mode: 0o600 });
   // Set explicitly: an existing file keeps its old mode through writeFile, and
   // the startup config it holds contains password hashes and keys.
@@ -59,7 +59,7 @@ export async function writeBackup(host: string, text: string, now: () => Date): 
   return { path, bytes: Buffer.byteLength(text, 'utf8'), createdAt };
 }
 
-export function createBackupGuard(rci: Rci, host: string, now: () => Date): BackupGuard {
+export function createBackupGuard(rci: Rci, name: string, now: () => Date): BackupGuard {
   let done: BackupResult | null = null;
   let pending: Promise<BackupResult> | null = null;
 
@@ -67,7 +67,7 @@ export function createBackupGuard(rci: Rci, host: string, now: () => Date): Back
     // startup-config, not running-config: the point is to capture the state a
     // reboot would return to.
     const text = await rci.getText(STARTUP_CONFIG);
-    done = await writeBackup(host, text, now);
+    done = await writeBackup(name, text, now);
     return done;
   }
 

@@ -1,13 +1,9 @@
-<p align="center">
-  <img src="https://raw.githubusercontent.com/salatmaster/keenetic-mcp/main/docs/images/logo.svg" width="96" alt="">
-</p>
-
 <h1 align="center">keenetic-mcp</h1>
 
 <p align="center">
-  <b>Your Keenetic or Netcraze router, in plain language.<br>
-  Ask Claude, Codex, Cursor or any MCP agent who is on your network, why the internet is down,<br>
-  or for a guest Wi-Fi. Nothing to install on the router.</b>
+  <b>VPN routing, separate networks and per-device rules on a Keenetic or Netcraze router,<br>
+  set up in one sentence to Claude, Codex or Cursor. Checked on the router, and undone by a reboot<br>
+  until you say it is right.</b>
 </p>
 
 <p align="center">
@@ -19,19 +15,55 @@
 </p>
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/salatmaster/keenetic-mcp/main/docs/images/hero.svg" width="900" alt="An agent asked who is using the most bandwidth calls list_devices and answers with three devices ranked by traffic. Asked to block the camera, it calls update_device, confirms the block was read back from the router, and warns that the change is not saved yet.">
+  <a href="#install">Install</a> ·
+  <a href="#what-to-ask">What to ask</a> ·
+  <a href="#why-changes-are-safe">Safety</a> ·
+  <a href="#tools">Tools</a> ·
+  <a href="#supported-routers">Supported routers</a> ·
+  <a href="#faq">FAQ</a>
 </p>
 
-The web interface answers one question per page, and "why is the internet slow" is spread across five
-of them. **keenetic-mcp** gives your agent the router's own API, so it reads all five at once, tells you
-what it found, and makes the change you ask for, carefully: nothing is saved until you say so, and
-every change is read back from the router before it is reported as done.
+Sending two devices through a VPN on a Keenetic means a connection policy, the right interfaces
+permitted in it, and every device assigned to it by hand. A separate network for smart home devices
+means a VLAN on every switch port, a bridge, addressing, DHCP, NAT, Wi-Fi and isolation, and missing
+any one of them gives you a network that half works. **keenetic-mcp** gives your AI agent the router's
+own API and the knowledge of where it bites, so you describe the result and the agent builds it.
 
-It runs on your computer and talks to the router over your LAN. No USB drive, no Entware, no firmware
-modification, no cloud. Netcraze routers run the same firmware under their own brand, so everything here
-applies to them as well.
+<p align="center">
+  <img src="https://raw.githubusercontent.com/salatmaster/keenetic-mcp/main/docs/demo/demo.svg" alt="A Claude Code session. Asked to put the TV and the work laptop on the WireGuard VPN and to give smart home devices their own Wi-Fi that cannot see the home network, Claude reads the policies and devices, puts both devices on the VPN policy, creates an isolated IoT segment with its own Wi-Fi, reports that every change was read back and that nothing is saved yet, and saves when asked." width="100%">
+</p>
+<p align="center"><sub>A composed session, not a recording: the tool calls, their arguments and the shape of every answer are the server's own, the home network is made up. <a href="docs/demo/scene.py">Source</a>.</sub></p>
 
-## Get started
+<table>
+<tr>
+<td width="33%" valign="top">
+
+**One sentence, not twelve pages**
+
+VPN for some devices and not others, a guest or smart home network the web interface actually lists,
+a device on a schedule. The agent finds the policies, devices and free addresses itself.
+
+</td>
+<td width="33%" valign="top">
+
+**Nothing breaks for good**
+
+The built-in tools take a backup first and read every change back from the router before reporting it,
+and nothing is saved until you say so. If something is off, a reboot puts everything back.
+
+</td>
+<td width="33%" valign="top">
+
+**Nothing on the router**
+
+It runs on your computer and talks to the router's own API over your LAN. No Entware, no USB drive, no
+firmware modification, no cloud. The password stays in your system keychain.
+
+</td>
+</tr>
+</table>
+
+## Install
 
 **Claude Code**
 
@@ -49,10 +81,7 @@ codex plugin add keenetic@keenetic
 npx -y keenetic-mcp init
 ```
 
-The plugins bring four skills along with the server. For the server on its own, `codex mcp add keenetic
--- npx -y keenetic-mcp`.
-
-**Cursor, Claude Desktop, anything else**
+**Cursor, Claude Desktop and any other MCP client**
 
 ```json
 {
@@ -62,169 +91,182 @@ The plugins bring four skills along with the server. For the server on its own, 
 }
 ```
 
-and run `npx -y keenetic-mcp init` once.
+then run `npx -y keenetic-mcp init` once.
 
-The wizard finds your router from the default gateway, confirms it really is a Keenetic or Netcraze, checks the
-password against it, and stores the password in your operating system keychain. Only the address and
-login go in a settings file. In a container, `KEENETIC_HOST`, `KEENETIC_USER` and `KEENETIC_PASSWORD`
-override everything.
+The wizard finds the router from your default gateway, checks that it really is a Keenetic or Netcraze,
+tries the password against it and puts the password in the operating system keychain. The plugins also
+bring four skills that teach the agent how the router really behaves. In a container, set
+`KEENETIC_HOST`, `KEENETIC_USER` and `KEENETIC_PASSWORD` instead.
 
-## Features
+## What to ask
 
-<img align="right" width="56%" hspace="14" src="https://raw.githubusercontent.com/salatmaster/keenetic-mcp/main/docs/images/devices.svg" alt="Active devices ranked by traffic, each with its Wi-Fi band and signal or wired port; a tablet with a weak signal is highlighted and a blocked camera is marked">
+**Routing**
 
-### Every device, at a glance
+- *Put the TV and my work laptop on the WireGuard VPN, everything else stays direct.*
+- *Which devices go through the VPN right now?*
+- *Move the phone to the VPN as well.*
 
-Who is online, how each device is connected, how strong its signal is and how much it has downloaded,
-ranked the way you asked. Then rename a device, block it, put it on a schedule or a VPN policy, or
-give it priority, in the same conversation.
+**Separate networks**
 
-<br clear="all">
-<br>
+- *Give the smart home stuff its own Wi-Fi that can't see my home network.*
+- *Make a guest network that goes out through the VPN.*
+- *Remove the IoT network and everything that came with it.*
 
-<img align="left" width="56%" hspace="14" src="https://raw.githubusercontent.com/salatmaster/keenetic-mcp/main/docs/images/safe-changes.svg" alt="The steps of one change: backup taken, applied to the running config, read back and compared, not saved yet, and save_config only when asked">
+**Devices**
 
-### Changes you can take back
+- *Who is using the most bandwidth right now?*
+- *Block the camera until I say otherwise.*
+- *Put the kids' tablet on the bedtime schedule.*
 
-The router answers a wrong command with HTTP 200 and changes nothing, so every write is read back and
-compared before the agent tells you it worked. A backup is taken before the first change, and nothing
-is saved until you say so: if something goes wrong, a reboot undoes it.
+**When something is wrong**
 
-<br clear="all">
-<br>
+- *The internet is down. Why?*
+- *Is it the router or the provider? Trace the route to github.com from the router.*
+- *What changed on the router today, and is any of it unsaved?*
 
-<img align="right" width="56%" hspace="14" src="https://raw.githubusercontent.com/salatmaster/keenetic-mcp/main/docs/images/segments.svg" alt="Two ways to build a guest network. The usual way skips the VLAN: devices get online, but the network is missing from the web interface. create_segment adds the VLAN on the switch ports, so the network is listed as a segment">
+Anything the built-in tools do not cover, such as a new WireGuard tunnel or routing by domain, goes
+through `rci_call`, the router's full API. The `keenetic-rci` skill shows the agent how to find the exact
+command in the router's own configuration instead of guessing it, and those changes are not saved until
+you say so either.
 
-### A guest network that actually shows up
+## Why changes are safe
 
-Build a bridge, an address and a Wi-Fi network, and you get a guest network that carries traffic
-perfectly and never appears in the web interface: a segment is VLAN-backed, and the VLAN is the part
-everyone leaves out. `create_segment` builds all of it, with its own Wi-Fi, DHCP and, if you want, a
-route through your VPN. `delete_segment` removes everything it created.
+- **Backup first.** Before the first change of a session, the configuration is downloaded into the
+  backups folder, readable by you only.
+- **Checked on the router.** A Keenetic answers a wrong command with HTTP 200 and changes nothing, so
+  every change the built-in tools make is read back and compared before the agent hears it worked. Creating a segment takes
+  about twenty commands; if one fails, all of them are rolled back.
+- **Nothing permanent until you say so.** Changes go to the running configuration only, so a reboot
+  undoes them. The server never calls `save_config` on its own.
+- **Read-only when you want it.** With `--read-only` the write tools are not registered at all, so
+  the agent never sees them, and `rci_call` refuses anything but reads.
+- **Your password stays yours.** It lives in the system keychain, never in a config file, a log or a
+  tool response.
 
-<br clear="all">
-<br>
-
-<img align="left" width="56%" hspace="14" src="https://raw.githubusercontent.com/salatmaster/keenetic-mcp/main/docs/images/diagnostics.svg" alt="Internet status: gateway reachable, DNS and captive check failing; a traceroute from the router reaches 1.1.1.1; conclusion: the line is fine, change the DNS servers">
-
-### Diagnostics from the router's side
-
-Which check failed when the internet is down: the gateway, DNS or the captive portal check. `ping` and
-`traceroute` run on the router itself, so they show the path your network takes, not your laptop's,
-and can go out through a specific interface such as a VPN tunnel.
-
-<br clear="all">
-<br>
-
-**Also:**
-
-- **Read-only with one flag.** With `--read-only` the write tools are not registered at all, so the
-  agent never sees them, and `rci_call` refuses anything but reads.
-- **Skills that know the router.** The plugins ship four: the API tree and its traps, the safe change
-  workflow, segments, and a step-by-step troubleshooting playbook.
-- **An escape hatch.** `rci_call` reaches any API path, for whatever the tools do not cover.
-- **Answers sized for a model.** The raw interface listing alone is 32 KB and the NAT table is over
-  100 KB; the tools return what the question needs.
-
-## How it works
-
-<p align="center">
-  <img src="https://raw.githubusercontent.com/salatmaster/keenetic-mcp/main/docs/images/how-it-works.svg" width="900" alt="Your agent talks MCP to keenetic-mcp on your computer, which talks HTTP to the Keenetic or Netcraze router's own RCI API on your LAN. keenetic-mcp connects to nothing else">
-</p>
-
-Keenetic and Netcraze routers expose RCI, a JSON mirror of their command-line tree, over HTTP. keenetic-mcp logs in
-with the router's challenge-response scheme, keeps one session alive across the agent's questions, and
-shapes the answers so they fit in a model's context. There is no coherent public documentation for
-RCI, so [docs/rci-api.md](docs/rci-api.md) collects what was learned building this: the login, the paths
-that exist, the traps, and how to recover a command's syntax from the router itself.
+Where the password is stored on each platform, and how to report something privately, are in
+[SECURITY.md](SECURITY.md).
 
 ## Tools
-
-**Read**
-
-| Tool | |
-|---|---|
-| `list_devices` | every device, filtered by active, wired, wireless or blocked, sorted by traffic or signal |
-| `get_device` | one device in full: lease, Wi-Fi rate, policy, schedule, traffic |
-| `list_interfaces` | WAN links, bridges, access points, VPN tunnels |
-| `get_interface` | one interface in full, including WireGuard peers |
-| `get_wifi_status` | radios by band, with client counts |
-| `get_internet_status` | reachability, and which check failed |
-| `ping` | ICMP echo from the router, optionally through a given interface |
-| `traceroute` | the path from the router, optionally from a given interface or source address |
-| `list_routes` | routing table, or just the default route |
-| `list_policies` | connection policies for selective routing |
-| `get_system_info` | model, firmware, CPU, memory, installed components |
-| `get_config_state` | unsaved changes, who changed what and when |
-| `list_segments` | every bridge, and whether the web interface lists it as a segment |
-| `backup_config` | download the configuration into the backups folder |
 
 **Change**
 
 | Tool | |
 |---|---|
-| `update_device` | rename, block or allow, assign a routing policy, schedule or priority |
-| `set_interface_state` | bring an interface up or down |
-| `create_segment` | a guest or IoT network the web interface actually lists, with Wi-Fi, DHCP and optional VPN routing |
+| `update_device` | rename, block or allow, put on a routing policy, a schedule or a priority |
+| `create_segment` | a guest or IoT network the web interface lists, with its own Wi-Fi, DHCP, isolation and optional VPN routing |
 | `delete_segment` | remove a segment and everything created with it |
+| `set_interface_state` | bring an interface up or down |
 | `save_config` | make pending changes survive a reboot |
 
-**Escape hatch**
+**Read**
 
 | Tool | |
 |---|---|
-| `rci_call` | any router API path, for whatever the tools above do not cover |
+| `list_devices`, `get_device` | every device, by traffic, signal or name; one device in full |
+| `list_policies` | routing policies and the links each one allows |
+| `list_segments` | every network, and whether the web interface lists it |
+| `list_interfaces`, `get_interface` | WAN links, bridges, access points, VPN tunnels with their peers |
+| `get_wifi_status` | radios by band, with client counts |
+| `get_internet_status` | whether the router is online, and which check failed if not |
+| `ping`, `traceroute` | run on the router itself, optionally through a given interface |
+| `list_routes` | the routing table, or just the default route |
+| `get_system_info` | model, firmware, CPU, memory, installed components |
+| `get_config_state` | unsaved changes, who changed what and when |
+| `backup_config` | download the configuration into the backups folder |
+
+**Everything else**
+
+| Tool | |
+|---|---|
+| `rci_call` | any path of the router's API |
 
 ## Skills
 
-One plugin directory serves both Claude Code and Codex: they read different manifests but share the
-same skills and the same server definition.
+The plugins for Claude Code and Codex share four skills:
 
-- **keenetic-rci** teaches the router's API tree: which paths exist, which ones return 100 KB, and how
-  to recover the exact syntax of a command from the router's own configuration.
-- **keenetic-safe-changes** teaches the change workflow: what the router's fail-safe does and does not
-  protect against, and which interfaces will cut off your own access.
-- **keenetic-segments** covers building an isolated network the router will admit exists.
-- **keenetic-troubleshoot** is an ordered playbook for "the internet is down", "Wi-Fi is bad" and "one
+- **keenetic-rci**: the API tree, which paths return 100 KB, and how to recover a command's exact
+  syntax from the router's own configuration.
+- **keenetic-safe-changes**: what the router's own fail-safe does and does not cover, and the order of
+  changes that does not cut off your own access.
+- **keenetic-segments**: why the obvious way to build a guest network gives one the web interface never
+  lists, and the VLAN it is missing.
+- **keenetic-troubleshoot**: an ordered playbook for "the internet is down", "Wi-Fi is bad" and "one
   device cannot connect".
-
-## Safety
-
-- **Nothing is saved unless you ask.** Changes apply to the running configuration and are discarded on
-  reboot until `save_config` is called. The server never calls it on its own.
-- **A backup is taken automatically** before the first change of a session, into the backups folder,
-  readable by you only.
-- **Every change is verified** by reading it back before it is reported as successful.
-- **Read-only mode really is read-only.** The write tools are not registered rather than registered and
-  refusing.
-- **Your password goes in the system keychain**, not in a config file, and never in a log or a tool
-  response.
-- **LAN only.** No cloud, no telemetry, no connection to anything but your router.
-
-Where the password is stored on each platform, and how to report something privately, are in
-[SECURITY.md](SECURITY.md).
 
 ## Supported routers
 
-Keenetic and Netcraze routers run the same firmware, KeeneticOS, and RCI is a standard part of it
-rather than a feature of expensive models, and the tool set adapts
-to the components each router actually has. Tried so far:
+Keenetic and Netcraze routers run the same firmware, and its API is part of every model rather than of
+expensive ones. The tool set adapts to what each router actually has. Tried so far:
 
 | Router | Firmware | What was checked |
 |---|---|---|
 | Keenetic Ultra (KN-1811) | 5.1.3 | everything, the router it was built against |
 | Keenetic Hopper DSL (KN-3610) | 5.1.8 | backups |
 | Keenetic Sprinter (KN-3710) | 5.2 Beta 3 | `ping` and `traceroute` |
-| Keenetic Hopper (KN-3810) | 5.2 Beta 4 | the ndw4 login, everyday use |
+| Keenetic Hopper (KN-3810) | 5.2 Beta 4 | the 5.2 login, everyday use |
 | Netcraze Speedster (NC-3013) | 5.2 Beta 1 | setup, system info, internet status, devices |
 
-Other models on the 5.1 branch: Giga (KN-1010), Hero (KN-1011, KN-1012), Start and Starter (KN-1111,
-KN-1112, KN-1121), Air and Explorer (KN-1613, KN-1621), Extra and Carrier (KN-1713, KN-1714, KN-1721),
-Ultra and Titan (KN-1810, KN-1812). Older hardware on 4.x and earlier has RCI too. If yours works, or
-does not, an issue saying so helps the next person.
+Other models on 5.1: Giga (KN-1010), Hero (KN-1011, KN-1012), Start and Starter (KN-1111, KN-1112,
+KN-1121), Air and Explorer (KN-1613, KN-1621), Extra and Carrier (KN-1713, KN-1714, KN-1721), Ultra and
+Titan (KN-1810, KN-1812). If yours works, or does not, an issue saying so helps the next person.
 
 **On 5.2, use Node 24.7 or later.** Newer 5.2 builds accept only the ndw4 login, which needs it. On
 older Node the server falls back to the previous login, which 5.1 accepts and 5.2 may not.
+
+## FAQ
+
+<details>
+<summary><b>Does my network data go to the cloud?</b></summary>
+
+<br>
+
+keenetic-mcp itself connects to nothing but your router: no cloud, no telemetry. What the tools return
+does go to your agent's model, the same as anything else you show it. The answers are trimmed to what the
+question needs, and the password is never in them.
+
+</details>
+
+<details>
+<summary><b>Can it lock me out of my own router?</b></summary>
+
+<br>
+
+Every change is in the running configuration only, so a reboot brings back the saved one. The router
+also has its own fail-safe that reverts a change when it loses the management session. The
+`keenetic-safe-changes` skill tells the agent which changes can cut off your own access, such as the
+interface you are connected through, and to ask before them.
+
+</details>
+
+<details>
+<summary><b>Can I let it look but not touch?</b></summary>
+
+<br>
+
+Start the server with `--read-only`. The write tools are then not registered at all, and `rci_call`
+refuses anything but reads.
+
+</details>
+
+<details>
+<summary><b>How is this different from the web interface or the app?</b></summary>
+
+<br>
+
+They show one setting per page. Here the agent reads everything it needs at once, so "why is the
+internet slow" or "put these two on the VPN" is one question instead of a walk through five pages, and
+the agent knows the traps those pages hide, such as the guest network that never appears in the list.
+
+</details>
+
+## How it works
+
+Keenetic and Netcraze routers expose RCI, a JSON mirror of their command-line tree, over HTTP.
+keenetic-mcp logs in with the router's challenge-response scheme, keeps one session alive across the
+agent's questions, and shapes the answers to fit a model's context: the raw interface listing alone is
+32 KB, and the NAT table is over 100 KB. There is no coherent public documentation for RCI, so
+[docs/rci-api.md](docs/rci-api.md) collects what was learned building this: the login, the paths that
+exist, the traps, and how to recover a command's syntax from the router itself.
 
 ## Contributing
 
@@ -234,8 +276,8 @@ npm test          # no router required
 ```
 
 Bug reports and pull requests are welcome, and reports from models nobody has tried yet most of all.
-[CONTRIBUTING.md](CONTRIBUTING.md) covers testing against a real router, fixtures, releases and the one
-rule that matters most here.
+[CONTRIBUTING.md](CONTRIBUTING.md) covers testing against a real router, fixtures, releases and the
+one rule that matters most here.
 
 ## License
 

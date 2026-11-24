@@ -56,6 +56,18 @@ A tag with a hyphen, such as `v0.4.0-beta.1`, is a prerelease: it goes to npm
 under `next` instead of `latest`, so `npx -y keenetic-mcp@next` installs it and
 nobody else gets it, and it stays out of the MCP Registry.
 
+## The README demo
+
+`docs/demo/demo.svg` is a composed Claude Code session, built from
+`docs/demo/scene.py` with the renderer next to it. If a tool's name, arguments
+or answer change, change the scene too, so the demo keeps showing what the
+server really does:
+
+```
+python3 docs/demo/scene.py docs/demo/demo.cast
+cd docs/demo && python3 make-demo.py demo.json demo.svg   # needs: pip install pyte
+```
+
 ## The one thing that matters most
 
 **Verify against the router, not against your model of it.**

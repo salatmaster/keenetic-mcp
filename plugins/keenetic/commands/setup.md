@@ -1,5 +1,5 @@
 ---
-description: Connect this plugin to your Keenetic router
+description: Connect this plugin to your Keenetic or Netcraze router
 ---
 
 The user wants to connect the Keenetic MCP server to their router.

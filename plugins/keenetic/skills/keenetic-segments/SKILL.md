@@ -1,6 +1,6 @@
 ---
 name: keenetic-segments
-description: Use when creating an isolated network on a Keenetic - a guest network, an IoT network, a segment routed through a VPN - explains why the obvious way produces a working network the web interface refuses to list, and the VLAN it is actually missing
+description: Use when creating an isolated network on a Keenetic or Netcraze router - a guest network, an IoT network, a segment routed through a VPN - explains why the obvious way produces a working network the web interface refuses to list, and the VLAN it is actually missing
 ---
 
 # Creating a segment the router will admit exists

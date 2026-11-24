@@ -1,6 +1,6 @@
 ---
 name: keenetic-safe-changes
-description: Use before changing anything on a Keenetic router - explains that changes are not saved until asked, what the router's fail-safe does and does not protect against, and the order that avoids locking yourself out
+description: Use before changing anything on a Keenetic or Netcraze router - explains that changes are not saved until asked, what the router's fail-safe does and does not protect against, and the order that avoids locking yourself out
 ---
 
 # Changing a Keenetic router without breaking it

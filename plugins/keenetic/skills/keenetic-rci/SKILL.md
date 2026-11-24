@@ -1,6 +1,6 @@
 ---
 name: keenetic-rci
-description: Use when a Keenetic question is not covered by the curated tools and you need rci_call - explains the RCI tree, the paths that exist, the responses that will blow up your context, and the traps that make a wrong call look like success
+description: Use when a Keenetic or Netcraze question is not covered by the curated tools and you need rci_call - explains the RCI tree, the paths that exist, the responses that will blow up your context, and the traps that make a wrong call look like success
 ---
 
 # Reaching the Keenetic API directly

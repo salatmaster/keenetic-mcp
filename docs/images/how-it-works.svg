@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="300" viewBox="0 0 900 300">
+  <style>
+    .mono { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace; }
+    .sans { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; }
+    .hi { fill: #F0F4FA; }
+    .txt { fill: #C5CEDB; }
+    .dim { fill: #7D8AA0; }
+    .tool { fill: #B392F0; }
+    .good { fill: #56D364; }
+    .warn { fill: #F0B429; }
+    .bad { fill: #FF7B72; }
+    .blue { fill: #4AA8FF; }
+  </style>
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 1L9 5 0 9Z" fill="#4AA8FF"/></marker>
+  </defs>
+  <rect x="0.5" y="0.5" width="899" height="299" rx="14" fill="#0D1320" stroke="#2A3448"/>
+  <rect x="306" y="28" width="572" height="226" rx="12" fill="none" stroke="#3A4558" stroke-dasharray="6 6"/>
+  <text x="322" y="50" class="sans dim" font-size="12" font-weight="600" letter-spacing="0.6">YOUR COMPUTER AND YOUR LAN</text>
+
+  <rect x="24" y="76" width="226" height="150" rx="12" fill="#161E2E" stroke="#2A3448"/>
+  <text x="44" y="110" class="sans hi" font-size="17" font-weight="600">Your agent</text>
+  <text x="44" y="138" class="sans txt" font-size="14">Claude Code, Codex,</text>
+  <text x="44" y="158" class="sans txt" font-size="14">Cursor, or any client</text>
+  <text x="44" y="178" class="sans txt" font-size="14">that speaks MCP</text>
+  <text x="44" y="208" class="sans dim" font-size="12.5">+ four skills about the router</text>
+
+  <line x1="254" y1="151" x2="344" y2="151" stroke="#4AA8FF" stroke-width="2" marker-end="url(#arr)"/>
+  <line x1="344" y1="161" x2="254" y2="161" stroke="#4AA8FF" stroke-width="2" stroke-opacity="0.45" marker-end="url(#arr)"/>
+  <text x="299" y="140" class="mono dim" font-size="12" text-anchor="middle">MCP</text>
+
+  <rect x="348" y="76" width="236" height="150" rx="12" fill="#4AA8FF" fill-opacity="0.10" stroke="#4AA8FF" stroke-width="1.4"/>
+  <text x="368" y="110" class="mono blue" font-size="17" font-weight="700">keenetic-mcp</text>
+  <text x="368" y="138" class="sans txt" font-size="14">password in the OS keychain</text>
+  <text x="368" y="158" class="sans txt" font-size="14">answers sized for a model</text>
+  <text x="368" y="178" class="sans txt" font-size="14">every write read back</text>
+  <text x="368" y="208" class="sans dim" font-size="12.5">read-only with one flag</text>
+
+  <line x1="588" y1="151" x2="660" y2="151" stroke="#4AA8FF" stroke-width="2" marker-end="url(#arr)"/>
+  <line x1="660" y1="161" x2="588" y2="161" stroke="#4AA8FF" stroke-width="2" stroke-opacity="0.45" marker-end="url(#arr)"/>
+  <text x="624" y="140" class="mono dim" font-size="12" text-anchor="middle">HTTP</text>
+
+  <rect x="664" y="76" width="198" height="150" rx="12" fill="#161E2E" stroke="#2A3448"/>
+  <text x="684" y="110" class="sans hi" font-size="17" font-weight="600">Your router</text>
+  <text x="684" y="138" class="sans txt" font-size="14">Keenetic or Netcraze</text>
+  <text x="684" y="158" class="sans txt" font-size="14">nothing installed</text>
+  <text x="684" y="178" class="sans txt" font-size="14">no Entware, no USB</text>
+  <text x="684" y="208" class="sans dim" font-size="12.5">its own RCI API, 5.1 and 5.2</text>
+
+  <text x="592" y="282" class="sans dim" font-size="13" text-anchor="middle">keenetic-mcp talks to your router and nothing else: no cloud, no telemetry</text>
+</svg>

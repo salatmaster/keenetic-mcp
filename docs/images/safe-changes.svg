@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="560" height="360" viewBox="0 0 560 360">
+  <style>
+    .mono { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace; }
+    .sans { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; }
+    .hi { fill: #F0F4FA; }
+    .txt { fill: #C5CEDB; }
+    .dim { fill: #7D8AA0; }
+    .tool { fill: #B392F0; }
+    .good { fill: #56D364; }
+    .warn { fill: #F0B429; }
+    .bad { fill: #FF7B72; }
+    .blue { fill: #4AA8FF; }
+  </style>
+  <rect x="0.5" y="0.5" width="559" height="359" rx="14" fill="#0D1320" stroke="#2A3448"/>
+  <text x="24" y="40" class="mono" font-size="14"><tspan class="tool">update_device</tspan><tspan class="dim">(hallway-camera, access: deny)</tspan></text>
+  <line x1="44" y1="84" x2="44" y2="316" stroke="#2A3448" stroke-width="2"/>
+  <line x1="44" y1="266" x2="44" y2="316" stroke="#0D1320" stroke-width="2"/>
+  <line x1="44" y1="266" x2="44" y2="316" stroke="#2A3448" stroke-width="2" stroke-dasharray="4 4"/>
+  <circle cx="44" cy="86" r="14" fill="#56D364" fill-opacity="0.15" stroke="#56D364" stroke-width="1.6"/><path d="M38 86 l4 4 8-9" fill="none" stroke="#56D364" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="74" y="84" class="sans hi" font-size="16" font-weight="600">Backup taken</text>
+  <text x="74" y="103" class="sans dim" font-size="13">the configuration, copied to the backups folder first</text>
+  <circle cx="44" cy="146" r="14" fill="#56D364" fill-opacity="0.15" stroke="#56D364" stroke-width="1.6"/><path d="M38 146 l4 4 8-9" fill="none" stroke="#56D364" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="74" y="144" class="sans hi" font-size="16" font-weight="600">Applied to the running config</text>
+  <text x="74" y="163" class="sans dim" font-size="13">the router answers 200 even to a command it ignored</text>
+  <circle cx="44" cy="206" r="14" fill="#56D364" fill-opacity="0.15" stroke="#56D364" stroke-width="1.6"/><path d="M38 206 l4 4 8-9" fill="none" stroke="#56D364" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="74" y="204" class="sans hi" font-size="16" font-weight="600">Read back and compared</text>
+  <text x="74" y="223" class="sans dim" font-size="13">access: deny is really there, not just accepted</text>
+  <circle cx="44" cy="266" r="14" fill="#F0B429" fill-opacity="0.15" stroke="#F0B429" stroke-width="1.6"/><rect x="43" y="259" width="2.4" height="9" rx="1.2" fill="#F0B429"/><circle cx="44.2" cy="272" r="1.5" fill="#F0B429"/>
+  <text x="74" y="264" class="sans warn" font-size="16" font-weight="600">Not saved</text>
+  <text x="74" y="283" class="sans dim" font-size="13">a reboot undoes it, nothing permanent yet</text>
+  <circle cx="44" cy="326" r="14" fill="#0D1320" stroke="#7D8AA0" stroke-width="1.6" stroke-dasharray="3 3"/>
+  <text x="74" y="324" class="sans dim" font-size="16" font-weight="600">save_config</text>
+  <text x="74" y="343" class="sans dim" font-size="13">only when you say so, never on its own</text>
+</svg>

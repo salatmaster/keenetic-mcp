@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96">
+  <defs>
+    <linearGradient id="bg" x1="88" y1="4" x2="8" y2="92" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#3DB9F7"/>
+      <stop offset="1" stop-color="#1A5FE0"/>
+    </linearGradient>
+    <linearGradient id="led" x1="30" y1="0" x2="66" y2="0" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#A7E63C"/>
+      <stop offset="1" stop-color="#17B457"/>
+    </linearGradient>
+  </defs>
+  <rect width="96" height="96" rx="22" fill="url(#bg)"/>
+  <rect x="26" y="14" width="7" height="26" rx="3.5" fill="#FFFFFF" fill-opacity="0.85"/>
+  <rect x="63" y="14" width="7" height="26" rx="3.5" fill="#FFFFFF" fill-opacity="0.85"/>
+  <path d="M26 36h44a10 10 0 0 1 10 10v16a10 10 0 0 1-10 10H40l-14 11v-11a10 10 0 0 1-10-10V46a10 10 0 0 1 10-10Z" fill="#FFFFFF"/>
+  <circle cx="34" cy="54" r="4.5" fill="url(#led)"/>
+  <circle cx="48" cy="54" r="4.5" fill="url(#led)"/>
+  <circle cx="62" cy="54" r="4.5" fill="url(#led)"/>
+</svg>

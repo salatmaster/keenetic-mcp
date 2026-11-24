@@ -1,6 +1,6 @@
 {
   "name": "keenetic",
-  "description": "Control your Keenetic router from Claude: who is on the network, Wi-Fi, interfaces, routing policies, and safe configuration changes",
+  "description": "Control your Keenetic or Netcraze router from Claude: who is on the network, Wi-Fi, interfaces, routing policies, and safe configuration changes",
   "author": {
     "name": "salatmaster"
   },
@@ -9,6 +9,7 @@
   "license": "MIT",
   "keywords": [
     "keenetic",
+    "netcraze",
     "router",
     "network",
     "home-lab",

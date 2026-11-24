@@ -4,12 +4,12 @@
     "name": "salatmaster",
     "url": "https://github.com/salatmaster"
   },
-  "description": "MCP server for Keenetic routers",
+  "description": "MCP server for Keenetic and Netcraze routers",
   "plugins": [
     {
       "name": "keenetic",
       "source": "./plugins/keenetic",
-      "description": "Control your Keenetic router from Claude: who is on the network, Wi-Fi, interfaces, routing policies, and safe configuration changes",
+      "description": "Control your Keenetic or Netcraze router from Claude: who is on the network, Wi-Fi, interfaces, routing policies, and safe configuration changes",
       "author": {
         "name": "salatmaster"
       },
@@ -19,6 +19,7 @@
       "category": "networking",
       "tags": [
         "keenetic",
+        "netcraze",
         "router",
         "network",
         "mcp",

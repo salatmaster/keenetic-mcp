@@ -1,6 +1,6 @@
 {
   "name": "keenetic",
-  "description": "Control your Keenetic router: who is on the network, Wi-Fi, interfaces, routing policies, and safe configuration changes",
+  "description": "Control your Keenetic or Netcraze router: who is on the network, Wi-Fi, interfaces, routing policies, and safe configuration changes",
   "author": {
     "name": "salatmaster",
     "url": "https://github.com/salatmaster"
@@ -10,6 +10,7 @@
   "license": "MIT",
   "keywords": [
     "keenetic",
+    "netcraze",
     "router",
     "network",
     "home-lab",
@@ -21,8 +22,8 @@
   "mcpServers": "./.mcp.json",
   "interface": {
     "displayName": "Keenetic",
-    "shortDescription": "Inspect and control a Keenetic router",
-    "longDescription": "Ask about your home network in plain language: which devices are connected, what is using the bandwidth, how the Wi-Fi looks, why the internet is down. Change what needs changing, safely: nothing is saved until you ask, a backup is taken before the first change, and every change is read back and verified. Talks to the router over your LAN with nothing installed on the router itself.",
+    "shortDescription": "Inspect and control a Keenetic or Netcraze router",
+    "longDescription": "Ask about your home network in plain language: which devices are connected, what is using the bandwidth, how the Wi-Fi looks, why the internet is down. Change what needs changing, safely: nothing is saved until you ask, a backup is taken before the first change, and every change is read back and verified. Talks to the router over your LAN with nothing installed on the router itself. Netcraze routers run the same firmware and work the same way.",
     "developerName": "salatmaster",
     "category": "Developer Tools",
     "capabilities": [

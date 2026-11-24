@@ -2,11 +2,12 @@
   "name": "keenetic-mcp",
   "version": "0.0.0-dev",
   "mcpName": "io.github.salatmaster/keenetic-mcp",
-  "description": "Control your Keenetic router from Claude, Codex, Cursor, or any MCP agent",
+  "description": "Control your Keenetic or Netcraze router from Claude, Codex, Cursor, or any MCP agent",
   "type": "module",
   "license": "MIT",
   "keywords": [
     "keenetic",
+    "netcraze",
     "router",
     "mcp",
     "model-context-protocol",

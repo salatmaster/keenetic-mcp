@@ -1,6 +1,6 @@
 ---
 name: keenetic-troubleshoot
-description: Use when someone reports the internet is down, Wi-Fi is bad, a device cannot connect, or the network is slow on a Keenetic router - an ordered playbook that narrows the fault instead of guessing
+description: Use when someone reports the internet is down, Wi-Fi is bad, a device cannot connect, or the network is slow on a Keenetic or Netcraze router - an ordered playbook that narrows the fault instead of guessing
 ---
 
 # Working out what is wrong with the network

@@ -21,3 +21,6 @@ scratch/
 # Throwaway probes written against a live router, which is where captured
 # addresses and keys turn up before anyone means to commit them.
 scratch-*
+
+# built from docs/demo/scene.py, only the rendered svg is kept
+docs/demo/demo.cast

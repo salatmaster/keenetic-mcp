@@ -1,0 +1,8 @@
+{
+  "cols": 100,
+  "rows": 34,
+  "forbid": ["slutmaster", "scratchpad", "claude-501"],
+  "title": "keenetic-mcp in Claude Code",
+  "desc": "A Claude Code session with keenetic-mcp. Asked to put the TV and the work laptop on the WireGuard VPN and to give smart home devices their own Wi-Fi that cannot see the home network, Claude reads the policies and devices, assigns both devices to the VPN policy, creates an isolated IoT segment with its own Wi-Fi, reports that every change was read back and that nothing is saved yet, and saves when asked.",
+  "scenes": [{"tab": "VPN and IoT", "cast": "demo.cast", "hold": 7, "read_cps": 110, "cap": 7}]
+}

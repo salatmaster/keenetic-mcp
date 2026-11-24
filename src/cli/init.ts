@@ -5,8 +5,9 @@ import {
   gatewayCommand,
   identifyRouter,
   parseGateway,
-  writeStoredConfig
+  writeStoredRouter
 } from '../config/discover.js';
+import { secretAccount, selectedProfile } from '../config/load.js';
 import { createSecretStore, spawnRunner, type SecretStore } from '../config/secrets.js';
 import { createClient } from '../router/client.js';
 
@@ -24,6 +25,8 @@ export interface VerifyFailed {
 
 export interface InitDeps {
   configDir: string;
+  /** Saves under this profile instead of as the default router. */
+  profile: string | null;
   /** Reads a visible line; returns '' when the user just presses enter. */
   prompt: (question: string, fallback: string) => Promise<string>;
   /** Reads a line without echoing it. */
@@ -41,6 +44,7 @@ export interface InitDeps {
  * have actually authenticated.
  */
 export async function runInit(deps: InitDeps): Promise<number> {
+  if (deps.profile) deps.out(`Setting up profile "${deps.profile}"`);
   const guess = (await deps.discoverGateway()) ?? '192.168.1.1';
   const host = (await deps.prompt('Router address', guess)) || guess;
 
@@ -63,13 +67,21 @@ export async function runInit(deps: InitDeps): Promise<number> {
   // Not "KeeneticOS": Netcraze ships the same firmware under its own name.
   deps.out(`${result.model}, firmware ${result.firmware}, ${result.components} components`);
 
-  const path = await writeStoredConfig(deps.configDir, { host, login });
-  const where = await deps.store.save(`${login}@${host}`, password);
+  const path = await writeStoredRouter(deps.configDir, { host, login }, deps.profile ?? undefined);
+  const where = await deps.store.save(secretAccount(deps.profile, login, host), password);
 
   deps.out('');
   deps.out(`Password stored in ${where}`);
   deps.out(`Settings written to ${path}`);
   deps.out('');
+  if (deps.profile) {
+    deps.out(`The server uses this router when KEENETIC_PROFILE=${deps.profile} is in its`);
+    deps.out(`environment, or when it is started with --profile ${deps.profile}. For one Claude`);
+    deps.out('Code project, put this in its .claude/settings.local.json:');
+    deps.out('');
+    deps.out(`  {"env": {"KEENETIC_PROFILE": "${deps.profile}"}}`);
+    deps.out('');
+  }
   deps.out('Add it to your agent. The plugin brings the skills along with the server:');
   deps.out('');
   deps.out('  Claude Code   /plugin marketplace add salatmaster/keenetic-mcp');
@@ -207,13 +219,21 @@ async function pipedSource(): Promise<LineSource> {
   };
 }
 
-export async function runInitFromTerminal(): Promise<number> {
+export async function runInitFromTerminal(argv: readonly string[]): Promise<number> {
+  let profile: string | null;
+  try {
+    profile = selectedProfile(argv, process.env);
+  } catch (error) {
+    process.stdout.write(`${(error as Error).message}\n`);
+    return 1;
+  }
   const source = process.stdin.isTTY ? terminalSource() : await pipedSource();
   const dir = configDir(process.platform, process.env);
 
   try {
     return await runInit({
       configDir: dir,
+      profile,
       prompt: (question, fallback) => source.ask(`${question} [${fallback}]: `, true),
       hidden: question => source.ask(`${question}: `, false),
       out: line => process.stdout.write(`${line}\n`),

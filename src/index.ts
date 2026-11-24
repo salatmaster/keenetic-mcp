@@ -5,7 +5,7 @@ import { McpServer } from '@modelcontextprotocol/server';
 import { StdioServerTransport } from '@modelcontextprotocol/server/stdio';
 import { runInitFromTerminal } from './cli/init.js';
 import { configDir, readStoredConfig } from './config/discover.js';
-import { loadConfig, type StoredCredentials } from './config/load.js';
+import { loadConfig } from './config/load.js';
 import { createSecretStore, spawnRunner } from './config/secrets.js';
 import { createBackupGuard } from './router/backup.js';
 import { createClient } from './router/client.js';
@@ -46,35 +46,30 @@ async function main(): Promise<void> {
   // `init` is a subcommand rather than a second binary, so the published
   // surface stays a single command.
   if (process.argv[2] === 'init') {
-    process.exit(await runInitFromTerminal());
+    process.exit(await runInitFromTerminal(process.argv.slice(3)));
   }
 
   const dir = configDir(process.platform, process.env);
-  const storedConfig = await readStoredConfig(dir);
   const store = createSecretStore(process.platform, spawnRunner, dir);
-
-  // Assigned conditionally: exactOptionalPropertyTypes rejects an explicit
-  // undefined for an optional property.
-  const stored: StoredCredentials = {};
-  if (storedConfig) {
-    stored.host = storedConfig.host;
-    stored.login = storedConfig.login;
-    const secret = await store.read(`${storedConfig.login}@${storedConfig.host}`);
-    if (secret !== null) stored.password = secret;
-  }
-
-  const config = await loadConfig(process.argv.slice(2), process.env, stored);
+  const config = await loadConfig(
+    process.argv.slice(2),
+    process.env,
+    await readStoredConfig(dir),
+    account => store.read(account)
+  );
   const client = createClient({
     host: config.host,
     login: config.login,
     password: config.password
   });
+  // Two routers can share an address, so a profile's backups carry its name.
+  const backupName = config.profile ? `${config.profile}-${config.host}` : config.host;
   const ctx: ToolContext = {
     client,
-    host: config.host,
+    backupName,
     maxResponseBytes: config.maxResponseBytes,
     readOnly: config.readOnly,
-    backup: createBackupGuard(client.rci, config.host, () => new Date())
+    backup: createBackupGuard(client.rci, backupName, () => new Date())
   };
 
   await createServer(ctx).connect(new StdioServerTransport());

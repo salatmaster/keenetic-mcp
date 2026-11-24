@@ -17,6 +17,11 @@ The password is never written to a settings file, never included in a tool
 response, and never logged. `KEENETIC_HOST`, `KEENETIC_USER` and
 `KEENETIC_PASSWORD` override the stored values, which is what a container wants.
 
+Each password is stored under the router it belongs to: `login@host`, or
+`profile:login@host` for a router set up with `init --profile`. The server reads
+the entry for the router it actually connects to, after those overrides, so it
+never sends one router's password to another.
+
 ## What it does not do
 
 No cloud, no telemetry, no outbound connection to anything but your router. It

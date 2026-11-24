@@ -39,6 +39,14 @@ return the model and firmware version. If it fails:
 - **"The router was unreachable"** means this machine is not on the same network
   as the router, or the address is wrong.
 
+If the user has more than one router, for example their own and their
+parents', each one after the first is set up with a name:
+`npx -y keenetic-mcp init --profile parents`. The server then talks to it when
+`KEENETIC_PROFILE=parents` is in its environment; in Claude Code that is
+`{"env": {"KEENETIC_PROFILE": "parents"}}` in the project's
+`.claude/settings.local.json`, followed by a restart of the session. A
+**"No profile"** error lists the profiles that are saved.
+
 If the user would rather not store anything, the server also reads
 `KEENETIC_HOST`, `KEENETIC_USER` and `KEENETIC_PASSWORD` from the environment,
 and those take precedence over the stored settings.

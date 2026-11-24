@@ -1,4 +1,4 @@
-import { mkdtemp, readFile } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -8,7 +8,7 @@ import {
   identifyRouter,
   parseGateway,
   readStoredConfig,
-  writeStoredConfig
+  writeStoredRouter
 } from '../../src/config/discover.js';
 
 afterEach(() => vi.restoreAllMocks());
@@ -114,27 +114,74 @@ describe('configDir', () => {
 });
 
 describe('stored config', () => {
+  const HOME = { host: '192.0.2.1', login: 'admin' };
+  const PARENTS = { host: '192.0.2.1', login: 'admin' };
+
+  async function fresh(): Promise<string> {
+    return mkdtemp(join(tmpdir(), 'kn-cfg-'));
+  }
+
   it('round-trips host and login', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'kn-cfg-'));
-    await writeStoredConfig(dir, { host: '192.0.2.1', login: 'admin' });
-    await expect(readStoredConfig(dir)).resolves.toEqual({ host: '192.0.2.1', login: 'admin' });
+    const dir = await fresh();
+    await writeStoredRouter(dir, HOME);
+    await expect(readStoredConfig(dir)).resolves.toEqual({ router: HOME, profiles: {} });
   });
 
-  it('returns null when nothing has been written', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'kn-cfg-'));
-    await expect(readStoredConfig(dir)).resolves.toBeNull();
+  it('is empty when nothing has been written', async () => {
+    const dir = await fresh();
+    await expect(readStoredConfig(dir)).resolves.toEqual({ router: null, profiles: {} });
   });
 
   it('never stores a password', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'kn-cfg-'));
-    const path = await writeStoredConfig(dir, { host: '192.0.2.1', login: 'admin' });
+    const dir = await fresh();
+    const path = await writeStoredRouter(dir, HOME);
+    await writeStoredRouter(dir, PARENTS, 'parents');
     expect(await readFile(path, 'utf8')).not.toMatch(/password/i);
   });
 
   it('ignores a file that is missing the fields it needs', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'kn-cfg-'));
-    const { writeFile } = await import('node:fs/promises');
+    const dir = await fresh();
     await writeFile(join(dir, 'config.json'), '{"host":"192.0.2.1"}', 'utf8');
-    await expect(readStoredConfig(dir)).resolves.toBeNull();
+    await expect(readStoredConfig(dir)).resolves.toEqual({ router: null, profiles: {} });
+  });
+
+  // 0.4 wrote host and login at the top level; that file has to keep working.
+  it('reads a config written before profiles existed', async () => {
+    const dir = await fresh();
+    await writeFile(join(dir, 'config.json'), '{"host":"192.0.2.1","login":"admin"}', 'utf8');
+    await expect(readStoredConfig(dir)).resolves.toEqual({ router: HOME, profiles: {} });
+  });
+
+  it('adds a profile without forgetting the default router', async () => {
+    const dir = await fresh();
+    await writeStoredRouter(dir, HOME);
+    await writeStoredRouter(dir, PARENTS, 'parents');
+    await expect(readStoredConfig(dir)).resolves.toEqual({
+      router: HOME,
+      profiles: { parents: PARENTS }
+    });
+  });
+
+  it('rewrites the default router without forgetting the profiles', async () => {
+    const dir = await fresh();
+    await writeStoredRouter(dir, PARENTS, 'parents');
+    await writeStoredRouter(dir, { host: '198.51.100.1', login: 'root' });
+    await expect(readStoredConfig(dir)).resolves.toEqual({
+      router: { host: '198.51.100.1', login: 'root' },
+      profiles: { parents: PARENTS }
+    });
+  });
+
+  it('skips a profile entry that is missing the fields it needs', async () => {
+    const dir = await fresh();
+    await writeFile(
+      join(dir, 'config.json'),
+      '{"profiles":{"broken":{"host":"192.0.2.1"},"parents":{"host":"192.0.2.1","login":"admin"}}}',
+      'utf8'
+    );
+    await expect(readStoredConfig(dir)).resolves.toEqual({
+      router: null,
+      profiles: { parents: PARENTS }
+    });
   });
 });

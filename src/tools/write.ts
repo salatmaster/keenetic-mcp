@@ -20,7 +20,7 @@ export async function verifiedWrite<T>(opts: {
   readBack: () => Promise<T>;
   check: (value: T) => boolean;
   what: string;
-}): Promise<T> {
+}): Promise<void> {
   await opts.apply();
   const value = await opts.readBack();
   if (!opts.check(value)) {
@@ -30,7 +30,6 @@ export async function verifiedWrite<T>(opts: {
         'Read the current state with the matching get_ tool before retrying.'
     );
   }
-  return value;
 }
 
 export function describeWrite(

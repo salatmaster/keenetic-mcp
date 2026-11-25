@@ -12,7 +12,6 @@ export interface BackupResult {
 /** What every mutating tool needs from the backup machinery. */
 export interface BackupGuard {
   ensure(): Promise<BackupResult>;
-  taken(): BackupResult | null;
 }
 
 /**
@@ -60,27 +59,25 @@ export async function writeBackup(name: string, text: string, now: () => Date): 
 }
 
 export function createBackupGuard(rci: Rci, name: string, now: () => Date): BackupGuard {
-  let done: BackupResult | null = null;
   let pending: Promise<BackupResult> | null = null;
 
   async function take(): Promise<BackupResult> {
     // startup-config, not running-config: the point is to capture the state a
     // reboot would return to.
     const text = await rci.getText(STARTUP_CONFIG);
-    done = await writeBackup(name, text, now);
-    return done;
+    return writeBackup(name, text, now);
   }
 
   return {
     ensure(): Promise<BackupResult> {
-      if (done) return Promise.resolve(done);
       // Latched like the auth handshake: concurrent writes must not race to
-      // snapshot the same configuration twice.
-      pending ??= take().finally(() => {
+      // snapshot the same configuration twice. A failure is dropped, so the
+      // next write tries again.
+      pending ??= take().catch((error: unknown) => {
         pending = null;
+        throw error;
       });
       return pending;
-    },
-    taken: () => done
+    }
   };
 }

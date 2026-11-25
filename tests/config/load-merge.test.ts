@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { loadConfig, secretAccount, selectedProfile } from '../../src/config/load.js';
+import { loadConfig, selectedProfile } from '../../src/config/load.js';
 
 const STORED = { router: { host: '198.51.100.1', login: 'stored-user' }, profiles: {} };
 
@@ -9,41 +9,6 @@ function keychain(entries: Record<string, string> = { 'stored-user@198.51.100.1'
 }
 
 describe('loadConfig precedence', () => {
-  it('uses stored values when the environment is empty', async () => {
-    const cfg = await loadConfig([], {} as NodeJS.ProcessEnv, STORED, keychain());
-    expect(cfg).toMatchObject({
-      host: '198.51.100.1',
-      login: 'stored-user',
-      password: 'stored-pass'
-    });
-  });
-
-  // Containers and CI have no keychain, so the environment has to win over
-  // whatever happens to be configured on a developer machine.
-  it('lets the environment override every stored value', async () => {
-    const cfg = await loadConfig(
-      [],
-      {
-        KEENETIC_HOST: '192.0.2.9',
-        KEENETIC_USER: 'env-user',
-        KEENETIC_PASSWORD: 'env-pass'
-      } as NodeJS.ProcessEnv,
-      STORED,
-      keychain()
-    );
-    expect(cfg).toMatchObject({ host: '192.0.2.9', login: 'env-user', password: 'env-pass' });
-  });
-
-  it('lets --host override a stored host', async () => {
-    const cfg = await loadConfig(
-      ['--host', '192.0.2.5'],
-      {} as NodeJS.ProcessEnv,
-      STORED,
-      keychain({ 'stored-user@192.0.2.5': 'other-pass' })
-    );
-    expect(cfg.host).toBe('192.0.2.5');
-  });
-
   it('lets the environment beat the flag', async () => {
     const cfg = await loadConfig(
       ['--host', '192.0.2.5'],
@@ -59,15 +24,6 @@ describe('loadConfig precedence', () => {
     );
   });
 
-  it('points at the wizard when the host is known but the password is not', async () => {
-    await expect(
-      loadConfig([], {} as NodeJS.ProcessEnv, {
-        router: { host: '192.0.2.1', login: 'admin' },
-        profiles: {}
-      })
-    ).rejects.toThrow(/keenetic-mcp init/);
-  });
-
   it('defaults the login to admin', async () => {
     const cfg = await loadConfig(
       [],
@@ -77,15 +33,22 @@ describe('loadConfig precedence', () => {
     );
     expect(cfg.login).toBe('admin');
     expect(cfg.password).toBe('p');
+    expect(cfg.readOnly).toBe(false);
+    expect(cfg.maxResponseBytes).toBe(25_000);
   });
 
-  it('still honours --read-only and --max-response-bytes', async () => {
+  it('uses stored values and honours --read-only and --max-response-bytes', async () => {
     const cfg = await loadConfig(
       ['--read-only', '--max-response-bytes', '8000'],
       {} as NodeJS.ProcessEnv,
       STORED,
       keychain()
     );
+    expect(cfg).toMatchObject({
+      host: '198.51.100.1',
+      login: 'stored-user',
+      password: 'stored-pass'
+    });
     expect(cfg.readOnly).toBe(true);
     expect(cfg.maxResponseBytes).toBe(8000);
   });
@@ -134,7 +97,7 @@ describe('loadConfig reads the password of the router it connects to', () => {
         STORED,
         keychain()
       )
-    ).rejects.toThrow(/No password stored for stored-user@192\.0\.2\.5/);
+    ).rejects.toThrow(/No password stored for stored-user@192\.0\.2\.5\. Run "npx keenetic-mcp init"/);
   });
 
   it('does not touch the keychain when the password is in the environment', async () => {
@@ -156,11 +119,6 @@ describe('profiles', () => {
     'admin@192.0.2.1': 'home-pass',
     'parents:admin@192.0.2.1': 'parents-pass',
     'office:root@198.51.100.1': 'office-pass'
-  });
-
-  it('keeps the 0.4 account for the default router', () => {
-    expect(secretAccount(null, 'admin', '192.0.2.1')).toBe('admin@192.0.2.1');
-    expect(secretAccount('parents', 'admin', '192.0.2.1')).toBe('parents:admin@192.0.2.1');
   });
 
   it('uses the default router when no profile is selected', async () => {

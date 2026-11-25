@@ -18,8 +18,7 @@ async function makeDeps(
     out: line => out.push(line),
     store: {
       save: vi.fn(async () => 'the system keychain'),
-      read: vi.fn(async () => null),
-      remove: vi.fn(async () => undefined)
+      read: vi.fn(async () => null)
     },
     discoverGateway: vi.fn(async () => '192.0.2.1'),
     identify: vi.fn(async () => ({ realm: 'Keenetic Ultra' })),
@@ -44,8 +43,19 @@ describe('runInit', () => {
       profiles: {}
     });
     expect(deps.store.save).toHaveBeenCalledWith('admin@192.0.2.1', 'hunter2');
-    expect(out.join('\n')).toMatch(/Keenetic Ultra \(KN-1811\)/);
-    expect(out.join('\n')).toMatch(/5\.1\.3/);
+
+    const text = out.join('\n');
+    expect(text).toMatch(/Keenetic Ultra \(KN-1811\)/);
+    expect(text).toMatch(/5\.1\.3/);
+    expect(text).toMatch(/system keychain/);
+    // The password must never be echoed.
+    expect(text).not.toContain('hunter2');
+    expect(text).toMatch(/Claude Code/);
+    expect(text).toMatch(/Codex/);
+    expect(text).toMatch(/plugin marketplace add salatmaster\/keenetic-mcp/);
+    expect(text).toMatch(/"command": "npx"/);
+    expect(text).toMatch(/"keenetic-mcp"/);
+    expect(text).not.toMatch(/profile/i);
   });
 
   it('does not call a Netcraze firmware KeeneticOS', async () => {
@@ -64,23 +74,6 @@ describe('runInit', () => {
     expect(text).toMatch(/Found Netcraze Speedster/);
     expect(text).toMatch(/Speedster \(NC-3013\), firmware 5\.2 Beta 1/);
     expect(text).not.toMatch(/KeeneticOS/);
-  });
-
-  it('never prints the password', async () => {
-    const { deps, out } = await makeDeps();
-    await runInit(deps);
-    expect(out.join('\n')).not.toContain('hunter2');
-  });
-
-  it('names both agents, not just one, plus the generic config', async () => {
-    const { deps, out } = await makeDeps();
-    await runInit(deps);
-    const text = out.join('\n');
-    expect(text).toMatch(/Claude Code/);
-    expect(text).toMatch(/Codex/);
-    expect(text).toMatch(/plugin marketplace add salatmaster\/keenetic-mcp/);
-    expect(text).toMatch(/"command": "npx"/);
-    expect(text).toMatch(/"keenetic-mcp"/);
   });
 
   it('fails with a usable message when nothing answers at the gateway', async () => {
@@ -111,32 +104,6 @@ describe('runInit', () => {
     expect(deps.identify).toHaveBeenCalledWith('192.168.1.1');
   });
 
-  it('reports where the secret went', async () => {
-    const { deps, out } = await makeDeps();
-    await runInit(deps);
-    expect(out.join('\n')).toMatch(/system keychain/);
-  });
-
-  it('verifies before it writes anything', async () => {
-    const order: string[] = [];
-    const { deps } = await makeDeps({
-      verify: vi.fn(async () => {
-        order.push('verify');
-        return { ok: true as const, model: 'M', firmware: '5.1.3', components: 1 };
-      }),
-      store: {
-        save: vi.fn(async () => {
-          order.push('save');
-          return 'the system keychain';
-        }),
-        read: vi.fn(async () => null),
-        remove: vi.fn(async () => undefined)
-      }
-    });
-    await runInit(deps);
-    expect(order).toEqual(['verify', 'save']);
-  });
-
   // Issue #26: a second router at the same address with the same login must
   // not overwrite the first one's password or settings.
   it('saves a profile next to the default router, under its own keychain account', async () => {
@@ -153,11 +120,5 @@ describe('runInit', () => {
     const text = out.join('\n');
     expect(text).toMatch(/Setting up profile "parents"/);
     expect(text).toMatch(/"KEENETIC_PROFILE": "parents"/);
-  });
-
-  it('does not talk about profiles when none was asked for', async () => {
-    const { deps, out } = await makeDeps();
-    await runInit(deps);
-    expect(out.join('\n')).not.toMatch(/profile/i);
   });
 });

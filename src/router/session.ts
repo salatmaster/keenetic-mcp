@@ -1,6 +1,7 @@
 import * as crypto from 'node:crypto';
 import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { AuthError, TransportError } from './errors.js';
+import { str } from '../shape/record.js';
 
 export interface SessionOptions {
   host: string;
@@ -13,7 +14,7 @@ export interface SessionOptions {
  * The Keenetic LAN handshake: MD5 over the credential triple, then SHA256 over
  * the challenge concatenated with that digest. Both digests are lowercase hex.
  */
-export function deriveAuthKey(
+function deriveAuthKey(
   login: string,
   realm: string,
   password: string,
@@ -68,15 +69,12 @@ async function deriveNdw4Keys(
 }
 
 export class Session {
-  private readonly opts: SessionOptions;
   /** The router randomises the cookie name, so both parts are stored verbatim. */
   private cookie: string | null = null;
   /** Set while an authentication is in flight so concurrent callers share it. */
   private authInFlight: Promise<void> | null = null;
 
-  constructor(opts: SessionOptions) {
-    this.opts = opts;
-  }
+  constructor(private readonly opts: SessionOptions) {}
 
   /**
    * Lazy authentication: the first 401 drives the handshake, then the call
@@ -155,17 +153,14 @@ export class Session {
 
     const realm = probe.headers.get('X-NDM-Realm');
     const challenge = probe.headers.get('X-NDM-Challenge');
-    if ((!realm || !challenge) && ndw4) {
-      throw new AuthError(
-        `The router at ${this.opts.host} only offers the ndw4 login, which needs Node 24.7 ` +
-          `or later; this is ${process.version}.`
-      );
-    }
     if (!realm || !challenge) {
       throw new AuthError(
-        `The router at ${this.opts.host} did not return an X-NDM-Challenge. ` +
-          'This endpoint does not use the LAN challenge scheme - remote access over ' +
-          'KeenDNS is not supported in this version.'
+        ndw4
+          ? `The router at ${this.opts.host} only offers the ndw4 login, which needs Node 24.7 ` +
+              `or later; this is ${process.version}.`
+          : `The router at ${this.opts.host} did not return an X-NDM-Challenge. ` +
+              'This endpoint does not use the LAN challenge scheme - remote access over ' +
+              'KeenDNS is not supported in this version.'
       );
     }
 
@@ -227,7 +222,7 @@ export class Session {
     };
 
     const answer = await this.ndw4Phase(endpoint, { login, nonce, proof: proof(authMessage) }, rejected);
-    const signature = typeof answer.signature === 'string' ? answer.signature : '';
+    const signature = str(answer, 'signature');
     const expected = hmac(keys.serverKey, authMessage);
     const received = Buffer.from(signature, 'base64');
     if (received.length !== expected.length || !timingSafeEqual(received, expected)) {
@@ -251,15 +246,15 @@ export class Session {
   ): Promise<Record<string, unknown>> {
     const res = await this.send('POST', endpoint, body);
     const data = res.headers.get('X-NDM-Data');
-    let reply: Record<string, unknown> = {};
+    if (!data) throw rejected(`no X-NDM-Data in the reply (HTTP ${res.status})`);
+    let reply: Record<string, unknown>;
     try {
-      reply = data ? (JSON.parse(Buffer.from(data, 'base64').toString('utf8')) as Record<string, unknown>) : {};
+      reply = JSON.parse(Buffer.from(data, 'base64').toString('utf8')) as Record<string, unknown>;
     } catch {
       throw rejected(`an unreadable reply (HTTP ${res.status})`);
     }
     const error = reply['error'] ?? reply['e'];
     if (error) throw rejected(String(error));
-    if (!data) throw rejected(`no X-NDM-Data in the reply (HTTP ${res.status})`);
     return reply;
   }
 }

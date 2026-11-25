@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
 import { parseCapabilities } from '../../src/router/capabilities.js';
-import { loadConfig } from '../../src/config/load.js';
 import { createClient } from '../../src/router/client.js';
 
 const VERSION = {
@@ -45,38 +44,3 @@ describe('client capability caching', () => {
   });
 });
 
-describe('loadConfig', () => {
-  it('reads host, login and password from the environment', async () => {
-    const cfg = await loadConfig([], {
-      KEENETIC_HOST: '192.0.2.1',
-      KEENETIC_USER: 'root',
-      KEENETIC_PASSWORD: 'secret'
-    } as NodeJS.ProcessEnv);
-    expect(cfg).toMatchObject({ host: '192.0.2.1', login: 'root', password: 'secret' });
-  });
-
-  it('defaults the login to admin and read-only to false', async () => {
-    const cfg = await loadConfig([], {
-      KEENETIC_HOST: '192.0.2.1',
-      KEENETIC_PASSWORD: 'secret'
-    } as NodeJS.ProcessEnv);
-    expect(cfg.login).toBe('admin');
-    expect(cfg.readOnly).toBe(false);
-    expect(cfg.maxResponseBytes).toBe(25_000);
-  });
-
-  it('honours --read-only and --max-response-bytes', async () => {
-    const cfg = await loadConfig(['--read-only', '--max-response-bytes', '4096'], {
-      KEENETIC_HOST: '192.0.2.1',
-      KEENETIC_PASSWORD: 'secret'
-    } as NodeJS.ProcessEnv);
-    expect(cfg.readOnly).toBe(true);
-    expect(cfg.maxResponseBytes).toBe(4096);
-  });
-
-  it('points at the wizard when the password is absent', async () => {
-    await expect(
-      loadConfig([], { KEENETIC_HOST: '192.0.2.1' } as NodeJS.ProcessEnv)
-    ).rejects.toThrow(/keenetic-mcp init/);
-  });
-});

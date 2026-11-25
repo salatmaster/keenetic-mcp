@@ -5,9 +5,11 @@ import {
   allocate,
   createSegment,
   HOME_BRIDGE,
+  nextBridgeNumber,
   readDependants,
   readInventory,
   readSegment,
+  readSwitchPorts,
   teardownSegment
 } from '../router/segments.js';
 import { fail, guard, ok, READ_ONLY, type ToolContext, type ToolResult } from './registry.js';
@@ -27,13 +29,8 @@ export function registerSegmentTools(server: McpServer, ctx: ToolContext): void 
     },
     guard(async (): Promise<ToolResult> => {
       const inventory = await readInventory(ctx.client.rci);
-      const segments = [];
-      for (const number of inventory.bridgeNumbers) {
-        const state = await readSegment(ctx.client.rci, `Bridge${number}`);
-        if (state !== null) segments.push(state);
-      }
       return ok({
-        segments,
+        segments: inventory.segments,
         switchPorts: inventory.ports.map(port => ({
           port: port.label,
           interface: port.name,
@@ -41,7 +38,7 @@ export function registerSegmentTools(server: McpServer, ctx: ToolContext): void 
           trunkVlans: port.trunkVids
         })),
         free: {
-          nextBridge: `Bridge${inventory.bridgeNumbers.length === 0 ? 1 : Math.max(...inventory.bridgeNumbers) + 1}`,
+          nextBridge: `Bridge${nextBridgeNumber(inventory.bridgeNumbers)}`,
           usedVlanIds: inventory.vlanIds,
           usedSubnets: inventory.subnets.map(octet => `192.168.${octet}.0/24`),
           usedPolicies: inventory.policies
@@ -129,7 +126,7 @@ export function registerSegmentTools(server: McpServer, ctx: ToolContext): void 
           withWifi: ssid !== undefined
         });
 
-        const created = await createSegment(ctx.client.rci, allocation, inventory.ports, {
+        const state = await createSegment(ctx.client.rci, allocation, inventory.ports, {
           name,
           policyDescription: policy_description ?? null,
           permitInterfaces: permit_interfaces ?? [],
@@ -140,20 +137,20 @@ export function registerSegmentTools(server: McpServer, ctx: ToolContext): void 
         return ok({
           ...describeWrite(
             {
-              segment: created.state.bridge,
+              segment: state.bridge,
               name,
-              address: created.allocation.address,
-              vlan: created.allocation.vlanId,
-              dhcp: `${created.allocation.dhcpBegin} - ${created.allocation.dhcpEnd}`,
-              trunkedOverPorts: created.ports,
-              policy: created.allocation.policy,
-              wifi: ssid === undefined ? null : { ssid, network: created.allocation.wlanKey }
+              address: allocation.address,
+              vlan: allocation.vlanId,
+              dhcp: `${allocation.dhcpBegin} - ${allocation.dhcpEnd}`,
+              trunkedOverPorts: inventory.ports.map(port => port.label),
+              policy: allocation.policy,
+              wifi: ssid === undefined ? null : { ssid, network: allocation.wlanKey }
             },
             snapshot.path
           ),
-          uiVisible: created.state.uiVisible,
-          include: created.state.include,
-          verifiedBy: `iseg.vlan=${created.state.vlanId}, iseg.vlan-port=${created.state.vlanPorts}`
+          uiVisible: state.uiVisible,
+          include: state.include,
+          verifiedBy: `iseg.vlan=${state.vlanId}, iseg.vlan-port=${state.vlanPorts}`
         });
       }
     )
@@ -189,14 +186,13 @@ export function registerSegmentTools(server: McpServer, ctx: ToolContext): void 
       }
 
       const snapshot = await ctx.backup.ensure();
-      const inventory = await readInventory(ctx.client.rci);
-
+      const ports = await readSwitchPorts(ctx.client.rci);
       const { wlanKeys, poolName } = await readDependants(ctx.client.rci, bridge);
 
       const failed = await teardownSegment(ctx.client.rci, {
         bridge,
         vlanId: state.vlanId === null ? null : Number(state.vlanId),
-        ports: inventory.ports,
+        ports,
         policy: null,
         poolName,
         wlanKeys
@@ -217,8 +213,6 @@ export function registerSegmentTools(server: McpServer, ctx: ToolContext): void 
           { removed: bridge, wifi: wlanKeys, dhcpPool: poolName, vlan: state.vlanId },
           snapshot.path
         ),
-        // A policy is shared configuration, so removing it with the segment
-        // could break another one that references it.
         note:
           'Applied to the running configuration but NOT saved. A reboot discards it. ' +
           'Any routing policy the segment used was left in place, because policies are ' +

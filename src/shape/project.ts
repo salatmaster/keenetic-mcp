@@ -1,3 +1,5 @@
+import { asRecord, str } from './record.js';
+
 export interface DeviceSummary {
   mac: string;
   ip: string;
@@ -18,15 +20,6 @@ export interface InterfaceSummary {
   state: string;
   address: string;
   defaultGateway: boolean;
-}
-
-function asRecord(value: unknown): Record<string, unknown> {
-  return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {};
-}
-
-function str(source: Record<string, unknown>, key: string): string {
-  const value = source[key];
-  return typeof value === 'string' ? value : '';
 }
 
 function num(source: Record<string, unknown>, key: string): number {

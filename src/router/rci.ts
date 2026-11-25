@@ -98,8 +98,7 @@ export class Rci {
       );
     }
 
-    const errors = collectStatuses(parsed).filter(s => s.status === 'error');
-    const first = errors[0];
+    const first = collectStatuses(parsed).find(s => s.status === 'error');
     if (first) {
       throw new RciError(first.message ?? 'the router reported an error', {
         path,

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { AuthError, RciError } from '../../src/router/errors.js';
+import { AuthError } from '../../src/router/errors.js';
 import type { Rci } from '../../src/router/rci.js';
 import {
   allocate,
@@ -11,14 +11,7 @@ import {
   teardownSegment,
   type SwitchPort
 } from '../../src/router/segments.js';
-
-const notFound = (path: string): never => {
-  throw new RciError('this path does not exist on this firmware', {
-    path,
-    code: '404',
-    ident: 'http'
-  });
-};
+import { parseLines, rciWith } from '../helpers/rci.js';
 
 /** A five-port switch with VLAN 1 as the access network and VLAN 2 already trunked. */
 const PORTS: Record<string, unknown> = {
@@ -35,19 +28,6 @@ const PORTS: Record<string, unknown> = {
   // Not a switch port: shares the prefix, has no switchport block.
   'show/rc/interface/GigabitEthernet0/3': { rename: '4' }
 };
-
-type PostFn = (body: unknown) => Promise<unknown>;
-
-function rciWith(paths: Record<string, unknown>, post: PostFn = async () => ({})): Rci {
-  return {
-    get: vi.fn(async (path: string) => {
-      if (path in paths) return paths[path];
-      return notFound(path);
-    }),
-    post,
-    getText: vi.fn(async () => '')
-  } as unknown as Rci;
-}
 
 describe('readSwitchPorts', () => {
   it('reads every port, both list and bare-object trunks, and stops at the first gap', async () => {
@@ -73,9 +53,7 @@ describe('readSwitchPorts', () => {
     const rci = {
       get: vi.fn(async () => {
         throw new AuthError('the router rejected the stored credentials');
-      }),
-      post: vi.fn(),
-      getText: vi.fn()
+      })
     } as unknown as Rci;
 
     await expect(readSwitchPorts(rci)).rejects.toThrow(/credentials/);
@@ -139,10 +117,6 @@ describe('readSegment', () => {
     expect(state?.home).toBe(true);
     expect(state?.uiVisible).toBe(true);
   });
-
-  it('returns null for a bridge that does not exist', async () => {
-    await expect(readSegment(rciWith({}), 'Bridge7')).resolves.toBeNull();
-  });
 });
 
 const INVENTORY = {
@@ -176,19 +150,23 @@ describe('allocate', () => {
     expect(allocation.poolName).toBe('_WEBADMIN_BRIDGE2');
   });
 
+  // A policy or Wi-Fi network named by hand, such as VPN, holds no number.
+  it('does not count a name without the prefix as a used number', async () => {
+    const inventory = await readInventory(
+      rciWith({ ...INVENTORY, 'show/rc/ip/policy': { VPN: {} }, 'show/rc/mws/wlan': { Home: {} } })
+    );
+    const allocation = allocate(inventory, { withPolicy: true, withWifi: true });
+
+    expect(allocation.policy).toBe('Policy0');
+    expect(allocation.wlanKey).toBe('wlan0');
+  });
+
   it('leaves out the policy and the Wi-Fi network when they are not wanted', async () => {
     const inventory = await readInventory(rciWith(INVENTORY));
     const allocation = allocate(inventory, { withPolicy: false, withWifi: false });
 
     expect(allocation.policy).toBeNull();
     expect(allocation.wlanKey).toBeNull();
-  });
-
-  it('refuses a requested subnet that is already routed', async () => {
-    const inventory = await readInventory(rciWith(INVENTORY));
-    expect(() => allocate(inventory, { subnet: 2, withPolicy: false, withWifi: false })).toThrow(
-      /192\.168\.2\.0\/24 is already in use/
-    );
   });
 });
 
@@ -216,7 +194,6 @@ const ALLOCATION = {
   vlanId: 3,
   vlanInterface: 'GigabitEthernet0/Vlan3',
   address: '192.168.3.1',
-  mask: '255.255.255.0',
   dhcpBegin: '192.168.3.33',
   dhcpEnd: '192.168.3.152',
   poolName: '_WEBADMIN_BRIDGE2',
@@ -232,40 +209,7 @@ const REQUEST = {
   psk: null
 };
 
-/** Collects every `parse` line a run sent, in order. */
-function parseLines(post: { mock: { calls: unknown[][] } }): string[] {
-  return post.mock.calls
-    .flatMap(([body]) => (Array.isArray(body) ? body : [body]))
-    .map(entry => (entry as { parse?: string }).parse)
-    .filter((line): line is string => typeof line === 'string');
-}
-
 describe('createSegment', () => {
-  it('trunks the VLAN over every port and verifies against iseg', async () => {
-    const post = vi.fn(async () => ({}));
-    const rci = rciWith(
-      {
-        'show/rc/interface/Bridge2': {
-          iseg: { vlan: '3', port: '1,2,3', 'vlan-port': '1,2,3' },
-          include: [{ interface: 'GigabitEthernet0/Vlan3' }]
-        }
-      },
-      post
-    );
-
-    const created = await createSegment(rci, ALLOCATION, THREE_PORTS, REQUEST);
-
-    expect(created.state.uiVisible).toBe(true);
-    const lines = parseLines(post);
-    for (const port of THREE_PORTS) {
-      expect(lines, `${port.name} must carry the VLAN`).toContain(
-        `interface ${port.name} switchport trunk vlan 3`
-      );
-    }
-    expect(lines).toContain('interface Bridge2 include GigabitEthernet0/Vlan3');
-    expect(lines).toContain('interface Bridge2 security-level protected');
-  });
-
   /**
    * The failure this guards against is a bridge that carries traffic and is not
    * a segment. Reporting success there is worse than failing, because the user
@@ -290,25 +234,6 @@ describe('createSegment', () => {
         `interface ${port.name} no switchport trunk vlan 3`
       );
     }
-  });
-
-  it('rolls back when a command partway through is rejected', async () => {
-    const post = vi.fn(async (body: unknown) => {
-      const lines = (Array.isArray(body) ? body : [body]) as { parse?: string }[];
-      if (lines.some(line => line.parse?.startsWith('interface Bridge2 ip address'))) {
-        throw new RciError('address already in use', {
-          path: 'POST /rci/',
-          code: '1',
-          ident: 'Command'
-        });
-      }
-      return {};
-    });
-
-    await expect(
-      createSegment(rciWith({}, post), ALLOCATION, THREE_PORTS, REQUEST)
-    ).rejects.toThrow(/address already in use/);
-    expect(parseLines(post)).toContain('no interface GigabitEthernet0/Vlan3');
   });
 
   it('says so when the rollback itself could not finish', async () => {

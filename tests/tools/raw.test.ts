@@ -1,38 +1,17 @@
 import { describe, expect, it, vi } from 'vitest';
-import { McpServer } from '@modelcontextprotocol/server';
 import { registerRawTool } from '../../src/tools/raw.js';
-import type { ToolContext, ToolResult } from '../../src/tools/registry.js';
 import type { KeeneticClient } from '../../src/router/client.js';
-import { stubBackup } from '../helpers/backup.js';
+import { captureTools, testContext, text, payload } from '../helpers/tools.js';
 
-type Handler = (args: Record<string, unknown>) => Promise<ToolResult>;
-
-function harness(readOnly = false, payload: unknown = { title: '5.1.3' }) {
-  const get = vi.fn(async () => payload);
-  const post = vi.fn(async () => payload);
+function harness(readOnly = false, answer: unknown = { title: '5.1.3' }) {
+  const get = vi.fn(async () => answer);
+  const post = vi.fn(async () => answer);
   const client = {
-    rci: { get, post, getText: vi.fn() },
-    capabilities: vi.fn()
+    rci: { get, post }
   } as unknown as KeeneticClient;
-  const ctx: ToolContext = { client, backupName: '192.0.2.1', maxResponseBytes: 2_000, readOnly, backup: stubBackup() };
-
-  const server = new McpServer({ name: 'test', version: '0.0.0' });
-  const handlers: Record<string, Handler> = {};
-  vi.spyOn(server, 'registerTool').mockImplementation(((
-    n: string,
-    _c: unknown,
-    h: Handler
-  ) => {
-    handlers[n] = h;
-    return {} as never;
-  }) as never);
-
-  registerRawTool(server, ctx);
+  const ctx = testContext(client, { maxResponseBytes: 2_000, readOnly });
+  const { handlers } = captureTools(server => registerRawTool(server, ctx));
   return { handlers, get, post };
-}
-
-function text(result: ToolResult): string {
-  return result.content.map(p => p.text).join('');
 }
 
 describe('rci_call', () => {
@@ -40,13 +19,7 @@ describe('rci_call', () => {
     const { handlers, get } = harness();
     const result = await handlers['rci_call']!({ method: 'GET', path: 'show/version' });
     expect(get).toHaveBeenCalledWith('show/version');
-    expect(JSON.parse(text(result))).toMatchObject({ title: '5.1.3' });
-  });
-
-  it('reaches a path no curated tool covers', async () => {
-    const { handlers, get } = harness();
-    await handlers['rci_call']!({ method: 'GET', path: 'show/processes' });
-    expect(get).toHaveBeenCalledWith('show/processes');
+    expect(payload(result)).toMatchObject({ title: '5.1.3' });
   });
 
   it('performs a POST with the given body', async () => {

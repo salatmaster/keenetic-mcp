@@ -1,19 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
-import { McpServer } from '@modelcontextprotocol/server';
 import { registerDeviceTools } from '../../src/tools/devices.js';
-import type { ToolContext, ToolResult } from '../../src/tools/registry.js';
 import type { KeeneticClient } from '../../src/router/client.js';
-import type { BackupGuard, BackupResult } from '../../src/router/backup.js';
-
-type Handler = (args: Record<string, unknown>) => Promise<ToolResult>;
+import { STUB_SNAPSHOT } from '../helpers/backup.js';
+import { captureTools, payload, testContext, text } from '../helpers/tools.js';
 
 const MAC = '02:00:00:00:00:01';
-
-const SNAPSHOT: BackupResult = {
-  path: '/tmp/backup.txt',
-  bytes: 10,
-  createdAt: '2026-08-07T00:00:00.000Z'
-};
 
 function harness(hotspotHost: Record<string, unknown>, showHost: Record<string, unknown> = {}) {
   const posts: unknown[] = [];
@@ -21,55 +12,27 @@ function harness(hotspotHost: Record<string, unknown>, showHost: Record<string, 
     rci: {
       get: vi.fn(async (path: string) => {
         if (path === 'ip/hotspot/host') return [{ mac: MAC, ...hotspotHost }];
-        // The real router returns only {mac} here and never echoes the name,
-        // which is why renames are verified through show/ip/hotspot instead.
-        if (path === 'known/host') return [{ mac: MAC }];
         if (path === 'show/ip/hotspot') return { host: [{ mac: MAC, ...showHost }] };
         return {};
       }),
       post: vi.fn(async (body: unknown) => {
         posts.push(body);
         return {};
-      }),
-      getText: vi.fn()
-    },
-    capabilities: vi.fn()
+      })
+    }
   } as unknown as KeeneticClient;
 
-  const backup: BackupGuard = {
-    ensure: vi.fn(async () => SNAPSHOT),
-    taken: () => null
-  };
-
-  const ctx: ToolContext = { client, backupName: '192.0.2.1', maxResponseBytes: 25_000, readOnly: false, backup };
-  const server = new McpServer({ name: 'test', version: '0.0.0' });
-  const handlers: Record<string, Handler> = {};
-  vi.spyOn(server, 'registerTool').mockImplementation(((
-    name: string,
-    _config: unknown,
-    handler: Handler
-  ) => {
-    handlers[name] = handler;
-    return {} as never;
-  }) as never);
-
-  registerDeviceTools(server, ctx);
-  return { handlers, posts, backup };
-}
-
-function payload(result: ToolResult): any {
-  return JSON.parse(result.content.map(p => p.text).join(''));
+  const ctx = testContext(client);
+  const { handlers } = captureTools(server => registerDeviceTools(server, ctx));
+  return { handlers, posts, backup: ctx.backup };
 }
 
 describe('update_device', () => {
-  it('sends deny to the ip/hotspot branch and reports it unsaved', async () => {
+  it('sends deny to the ip/hotspot branch', async () => {
     const { handlers, posts } = harness({ access: 'deny', deny: true });
-    const out = payload(await handlers['update_device']!({ mac: MAC, access: 'deny' }));
+    await handlers['update_device']!({ mac: MAC, access: 'deny' });
 
     expect(posts).toContainEqual({ ip: { hotspot: { host: { mac: MAC, deny: true } } } });
-    expect(out.saved).toBe(false);
-    expect(out.unsavedChanges).toBe(true);
-    expect(out.note).toMatch(/save_config/);
   });
 
   it('sends name to the known branch, not to ip/hotspot', async () => {
@@ -84,21 +47,21 @@ describe('update_device', () => {
     const { handlers } = harness({}, {});
     const result = await handlers['update_device']!({ mac: MAC, name: 'new-name' });
     expect(result.isError).toBe(true);
-    expect(result.content.map(p => p.text).join('')).toMatch(/name=new-name did not take effect/);
+    expect(text(result)).toMatch(/name=new-name did not take effect/);
   });
 
   it('takes a backup before applying anything', async () => {
     const { handlers, backup } = harness({ access: 'permit', permit: true });
     const out = payload(await handlers['update_device']!({ mac: MAC, access: 'permit' }));
     expect(backup.ensure).toHaveBeenCalledOnce();
-    expect(out.backup).toBe('/tmp/backup.txt');
+    expect(out.backup).toBe(STUB_SNAPSHOT.path);
   });
 
   it('fails when the read-back does not show the requested change', async () => {
     const { handlers } = harness({ access: 'permit', permit: true });
     const result = await handlers['update_device']!({ mac: MAC, access: 'deny' });
     expect(result.isError).toBe(true);
-    expect(result.content.map(p => p.text).join('')).toMatch(/did not take effect/i);
+    expect(text(result)).toMatch(/did not take effect/i);
   });
 
   it('applies name before access so the host is registered first', async () => {

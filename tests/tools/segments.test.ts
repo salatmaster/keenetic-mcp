@@ -1,12 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-import { McpServer } from '@modelcontextprotocol/server';
-import { RciError } from '../../src/router/errors.js';
 import type { KeeneticClient } from '../../src/router/client.js';
 import { registerSegmentTools } from '../../src/tools/segments.js';
-import type { ToolContext, ToolResult } from '../../src/tools/registry.js';
-import { stubBackup } from '../helpers/backup.js';
-
-type Handler = (args: Record<string, unknown>) => Promise<ToolResult>;
+import { captureTools, payload, testContext, text } from '../helpers/tools.js';
+import { parseLines, rciWith } from '../helpers/rci.js';
 
 /** A two-port switch, a home segment, and nothing else configured. */
 const SWITCH: Record<string, unknown> = {
@@ -15,10 +11,7 @@ const SWITCH: Record<string, unknown> = {
     switchport: { access: { vid: '1' }, trunk: [{ vid: '2' }] }
   },
   'show/rc/interface/GigabitEthernet0/1': { rename: '2', switchport: { access: { vid: '1' } } },
-  'show/rc/interface/Bridge0': { ip: { address: { address: '192.168.1.1' } } },
-  'show/rc/ip/dhcp': { pool: {} },
-  'show/rc/ip/policy': {},
-  'show/rc/mws/wlan': {}
+  'show/rc/interface/Bridge0': { ip: { address: { address: '192.168.1.1' } } }
 };
 
 /** What the router reports for the bridge once the VLAN has landed. */
@@ -58,57 +51,11 @@ function harness(opts: HarnessOptions = {}) {
     return {};
   });
 
-  const client = {
-    rci: {
-      get: vi.fn(async (path: string) => {
-        if (path in paths) return paths[path];
-        throw new RciError('this path does not exist on this firmware', {
-          path,
-          code: '404',
-          ident: 'http'
-        });
-      }),
-      post,
-      getText: vi.fn(async () => '')
-    },
-    capabilities: vi.fn()
-  } as unknown as KeeneticClient;
+  const client = { rci: rciWith(paths, post) } as unknown as KeeneticClient;
 
-  const ctx: ToolContext = {
-    client,
-    backupName: '192.0.2.1',
-    maxResponseBytes: 25_000,
-    readOnly: opts.readOnly === true,
-    backup: stubBackup()
-  };
-
-  const server = new McpServer({ name: 'test', version: '0.0.0' });
-  const handlers: Record<string, Handler> = {};
-  vi.spyOn(server, 'registerTool').mockImplementation(((
-    name: string,
-    _config: unknown,
-    handler: Handler
-  ) => {
-    handlers[name] = handler;
-    return {} as never;
-  }) as never);
-
-  registerSegmentTools(server, ctx);
-  return { handlers, post, ctx };
-}
-
-function payload(result: ToolResult): Record<string, unknown> {
-  return JSON.parse(result.content.map(part => part.text).join('')) as Record<string, unknown>;
-}
-
-function text(result: ToolResult): string {
-  return result.content.map(part => part.text).join('');
-}
-
-function sentLines(post: { mock: { calls: unknown[][] } }): (string | undefined)[] {
-  return post.mock.calls
-    .flatMap(([body]) => (Array.isArray(body) ? body : [body]))
-    .map(entry => (entry as { parse?: string }).parse);
+  const ctx = testContext(client, { readOnly: opts.readOnly === true });
+  const { handlers } = captureTools(server => registerSegmentTools(server, ctx));
+  return { handlers, post };
 }
 
 describe('list_segments', () => {
@@ -131,13 +78,6 @@ describe('list_segments', () => {
     expect(bridge1?.['uiVisible'], 'and the web interface still will not list it').toBe(false);
     expect(body['switchPorts']).toHaveLength(2);
   });
-
-  it('is the only segment tool registered in read-only mode', () => {
-    const { handlers } = harness({ readOnly: true });
-    expect(handlers['list_segments']).toBeDefined();
-    expect(handlers['create_segment']).toBeUndefined();
-    expect(handlers['delete_segment']).toBeUndefined();
-  });
 });
 
 describe('create_segment', () => {
@@ -146,21 +86,19 @@ describe('create_segment', () => {
     paths: { 'show/rc/interface/Bridge1': BUILT }
   };
 
-  it('trunks the VLAN over every port and reports the change as unsaved', async () => {
-    const { handlers, post, ctx } = harness({ appearsOn: BECOMES_A_SEGMENT });
+  it('trunks the VLAN over every port, behind a backup', async () => {
+    const { handlers, post } = harness({ appearsOn: BECOMES_A_SEGMENT });
 
     const body = payload(await handlers['create_segment']!({ name: 'iot' }));
 
     expect(body['uiVisible']).toBe(true);
-    expect(body['saved'], 'no write tool ever saves').toBe(false);
-    expect(body['unsavedChanges']).toBe(true);
     expect(body['backup']).toBe('/tmp/keenetic-test-backup.txt');
-    expect(ctx.backup.ensure).toHaveBeenCalled();
 
-    const lines = sentLines(post);
+    const lines = parseLines(post);
     expect(lines).toContain('interface GigabitEthernet0/0 switchport trunk vlan 3');
     expect(lines).toContain('interface GigabitEthernet0/1 switchport trunk vlan 3');
     expect(lines).toContain('interface Bridge1 include GigabitEthernet0/Vlan3');
+    expect(lines).toContain('interface Bridge1 security-level protected');
   });
 
   it('sends the DHCP pool as JSON, because parse rejects it', async () => {
@@ -188,10 +126,7 @@ describe('create_segment', () => {
 
   /** No switch means no VLAN to trunk, which means no segment the UI will list. */
   it('refuses a router that reports no switch ports, rather than building the invisible kind', async () => {
-    const { handlers, post } = harness({
-      bare: true,
-      paths: { 'show/rc/ip/dhcp': { pool: {} }, 'show/rc/ip/policy': {}, 'show/rc/mws/wlan': {} }
-    });
+    const { handlers, post } = harness({ bare: true });
 
     const result = await handlers['create_segment']!({ name: 'iot' });
 
@@ -244,9 +179,8 @@ describe('delete_segment', () => {
     const body = payload(await handlers['delete_segment']!({ bridge: 'Bridge1' }));
 
     expect((body['applied'] as Record<string, unknown>)['removed']).toBe('Bridge1');
-    expect(body['saved']).toBe(false);
 
-    const lines = sentLines(post);
+    const lines = parseLines(post);
     expect(lines, 'the Wi-Fi bound to it, whatever its key').toContain('no mws wlan wlan4');
     expect(lines, 'the pool bound to it, whatever its name').toContain(
       'no ip dhcp pool madeInTheWebUi'

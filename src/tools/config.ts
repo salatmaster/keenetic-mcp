@@ -25,15 +25,11 @@ import { fail, guard, ok, READ_ONLY, type ToolContext, type ToolResult } from '.
  * "not confirmed", so a failed read sends the caller to look rather than
  * telling them the save landed.
  */
-async function waitForSaved(
-  ctx: ToolContext,
-  before: LastChange,
-  attempts = 30,
-  delayMs = 500
-): Promise<boolean> {
-  for (let attempt = 0; attempt < attempts; attempt += 1) {
+async function waitForSaved(ctx: ToolContext, before: LastChange): Promise<boolean> {
+  // Up to 15 seconds, checked twice a second.
+  for (let attempt = 0; attempt < 30; attempt += 1) {
     if (checksumMoved(before, await readLastChange(ctx.client.rci))) break;
-    await new Promise(resolve => setTimeout(resolve, delayMs));
+    await new Promise(resolve => setTimeout(resolve, 500));
   }
   return (await readConfigState(ctx.client.rci)).unsavedChanges === false;
 }

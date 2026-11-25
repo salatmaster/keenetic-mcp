@@ -57,11 +57,7 @@ async function main(): Promise<void> {
     await readStoredConfig(dir),
     account => store.read(account)
   );
-  const client = createClient({
-    host: config.host,
-    login: config.login,
-    password: config.password
-  });
+  const client = createClient(config);
   // Two routers can share an address, so a profile's backups carry its name.
   const backupName = config.profile ? `${config.profile}-${config.host}` : config.host;
   const ctx: ToolContext = {

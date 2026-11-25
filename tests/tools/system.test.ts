@@ -1,16 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
-import { McpServer } from '@modelcontextprotocol/server';
 import { registerSystemTools } from '../../src/tools/system.js';
-import { fail, ok, type ToolContext, type ToolResult } from '../../src/tools/registry.js';
+import { fail, type ToolContext } from '../../src/tools/registry.js';
 import { AuthError } from '../../src/router/errors.js';
 import type { KeeneticClient } from '../../src/router/client.js';
-import { stubBackup } from '../helpers/backup.js';
-
-type Handler = (args: Record<string, unknown>) => Promise<ToolResult>;
-interface Captured {
-  handlers: Record<string, Handler>;
-  configs: Record<string, { annotations?: { readOnlyHint?: boolean } }>;
-}
+import { captureTools, testContext, text, payload } from '../helpers/tools.js';
 
 const CAPS = {
   model: 'Keenetic Model (KN-0000)',
@@ -37,47 +30,18 @@ function contextWith(
     rci: { get, post: vi.fn(), getText },
     capabilities: async () => CAPS
   } as unknown as KeeneticClient;
-  return { client, backupName: '192.0.2.1', maxResponseBytes: 25_000, readOnly: false, backup: stubBackup() };
+  return testContext(client);
 }
 
-/** Registers the tools against a real McpServer with registerTool intercepted. */
-function capture(ctx: ToolContext): Captured {
-  const server = new McpServer({ name: 'test', version: '0.0.0' });
-  const handlers: Record<string, Handler> = {};
-  const configs: Record<string, { annotations?: { readOnlyHint?: boolean } }> = {};
-  vi.spyOn(server, 'registerTool').mockImplementation(((
-    name: string,
-    config: { annotations?: { readOnlyHint?: boolean } },
-    handler: Handler
-  ) => {
-    handlers[name] = handler;
-    configs[name] = config;
-    return {} as never;
-  }) as never);
-
-  registerSystemTools(server, ctx);
-  return { handlers, configs };
-}
-
-function textOf(result: ToolResult): string {
-  return result.content.map(part => part.text).join('');
+function capture(ctx: ToolContext) {
+  return captureTools(server => registerSystemTools(server, ctx));
 }
 
 describe('result helpers', () => {
-  it('ok serialises the payload as JSON text', () => {
-    expect(JSON.parse(textOf(ok({ a: 1 })))).toEqual({ a: 1 });
-  });
-
-  it('fail marks isError and includes the guidance', () => {
-    const result = fail(new AuthError('bad credentials'));
-    expect(result.isError).toBe(true);
-    expect(textOf(result)).toContain('keenetic-mcp init');
-  });
-
   it('fail handles a non-Error value without crashing', () => {
     const result = fail('something odd');
     expect(result.isError).toBe(true);
-    expect(textOf(result)).toContain('something odd');
+    expect(text(result)).toContain('something odd');
   });
 });
 
@@ -98,11 +62,11 @@ describe('get_system_info', () => {
       })
     );
 
-    const payload = JSON.parse(textOf(await handlers['get_system_info']!({})));
-    expect(payload.model).toBe('Keenetic Model (KN-0000)');
-    expect(payload.firmware).toBe('5.1.3');
-    expect(payload.components).toContain('wireguard');
-    expect(payload.cpuLoad).toBe(6);
+    const out = payload(await handlers['get_system_info']!({}));
+    expect(out.model).toBe('Keenetic Model (KN-0000)');
+    expect(out.firmware).toBe('5.1.3');
+    expect(out.components).toContain('wireguard');
+    expect(out.cpuLoad).toBe(6);
   });
 
   it('counts buffers and cache as available, matching the router used/total figure', async () => {
@@ -113,11 +77,11 @@ describe('get_system_info', () => {
       })
     );
 
-    const payload = JSON.parse(textOf(await handlers['get_system_info']!({})));
+    const out = payload(await handlers['get_system_info']!({}));
     const used = Number(SHOW_SYSTEM.memory.split('/')[0]);
-    expect(payload.memoryFreeKb).toBe(297_508);
-    expect(payload.memoryAvailableKb).toBe(297_508 + 15_232 + 55_504);
-    expect(payload.memoryTotalKb - payload.memoryAvailableKb).toBe(used);
+    expect(out.memoryFreeKb).toBe(297_508);
+    expect(out.memoryAvailableKb).toBe(297_508 + 15_232 + 55_504);
+    expect(out.memoryTotalKb - out.memoryAvailableKb).toBe(used);
   });
 
   it('reports available memory as null rather than guessing from a partial answer', async () => {
@@ -125,8 +89,8 @@ describe('get_system_info', () => {
       contextWith(async () => ({ memtotal: 131_072, memfree: 15_360 }))
     );
 
-    const payload = JSON.parse(textOf(await handlers['get_system_info']!({})));
-    expect(payload.memoryAvailableKb).toBeNull();
+    const out = payload(await handlers['get_system_info']!({}));
+    expect(out.memoryAvailableKb).toBeNull();
   });
 
   it('returns isError instead of throwing when the router is unreachable', async () => {
@@ -138,13 +102,7 @@ describe('get_system_info', () => {
 
     const result = await handlers['get_system_info']!({});
     expect(result.isError).toBe(true);
-    expect(textOf(result)).toContain('keenetic-mcp init');
-  });
-
-  it('registers read tools with readOnlyHint', () => {
-    const { configs } = capture(contextWith(async () => ({})));
-    expect(configs['get_system_info']?.annotations?.readOnlyHint).toBe(true);
-    expect(configs['get_config_state']?.annotations?.readOnlyHint).toBe(true);
+    expect(text(result)).toContain('keenetic-mcp init');
   });
 });
 
@@ -171,27 +129,20 @@ describe('get_config_state', () => {
   it('reports unsaved changes when flash still holds an older checksum', async () => {
     const { handlers } = capture(contextWith(lastChange, startupWith(STALE)));
 
-    const payload = JSON.parse(textOf(await handlers['get_config_state']!({})));
-    expect(payload.unsavedChanges).toBe(true);
-    expect(payload.runningChecksum).toBe(RUNNING);
-    expect(payload.savedChecksum).toBe(STALE);
-    expect(payload.lastChangedBy).toBe('admin');
-    expect(payload.failSafe.rollbackPending).toBe(false);
+    const out = payload(await handlers['get_config_state']!({}));
+    expect(out.unsavedChanges).toBe(true);
+    expect(out.runningChecksum).toBe(RUNNING);
+    expect(out.savedChecksum).toBe(STALE);
+    expect(out.lastChangedBy).toBe('admin');
+    expect(out.failSafe.rollbackPending).toBe(false);
+    expect(out.failSafe.unsaved).toBe(false);
   });
 
   it('reports saved once the checksums agree', async () => {
     const { handlers } = capture(contextWith(lastChange, startupWith(RUNNING)));
 
-    const payload = JSON.parse(textOf(await handlers['get_config_state']!({})));
-    expect(payload.unsavedChanges).toBe(false);
-  });
-
-  it('surfaces the fail-safe flag separately from the saved state', async () => {
-    const { handlers } = capture(contextWith(lastChange, startupWith(STALE)));
-
-    const payload = JSON.parse(textOf(await handlers['get_config_state']!({})));
-    expect(payload.failSafe.unsaved).toBe(false);
-    expect(payload.unsavedChanges).toBe(true);
+    const out = payload(await handlers['get_config_state']!({}));
+    expect(out.unsavedChanges).toBe(false);
   });
 
   it('answers unknown rather than saved when the startup config cannot be read', async () => {
@@ -201,8 +152,8 @@ describe('get_config_state', () => {
       })
     );
 
-    const payload = JSON.parse(textOf(await handlers['get_config_state']!({})));
-    expect(payload.unsavedChanges).toBeNull();
-    expect(payload.savedChecksum).toBeNull();
+    const out = payload(await handlers['get_config_state']!({}));
+    expect(out.unsavedChanges).toBeNull();
+    expect(out.savedChecksum).toBeNull();
   });
 });

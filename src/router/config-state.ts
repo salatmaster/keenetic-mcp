@@ -1,14 +1,11 @@
 import type { Rci } from './rci.js';
+import { asRecord } from '../shape/record.js';
 
 /** Where the router serves the saved configuration. Three callers need the path. */
 export const STARTUP_CONFIG = '/ci/startup-config.txt';
 
 /** The router stamps the saved configuration with its own checksum, in a header comment. */
 const SAVED_CHECKSUM = /^!\s*\$+\s*Md5 checksum:\s*([0-9a-f]{32})/im;
-
-function asRecord(value: unknown): Record<string, unknown> {
-  return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {};
-}
 
 function asString(value: unknown): string | null {
   return typeof value === 'string' ? value : null;
@@ -32,7 +29,7 @@ export interface ConfigState {
   savedChecksum: string | null;
   /** null when the saved checksum could not be read - never a guess. */
   unsavedChanges: boolean | null;
-  failSafe: { unsaved: boolean; rollbackPending: boolean; secondsLeft: unknown };
+  failSafe: LastChange['failSafe'];
 }
 
 /**
@@ -85,8 +82,7 @@ export async function readConfigState(rci: Rci): Promise<ConfigState> {
   try {
     savedChecksum = SAVED_CHECKSUM.exec(await rci.getText(STARTUP_CONFIG))?.[1] ?? null;
   } catch {
-    // Reporting "saved" on a failed read would be the very error this replaces.
-    savedChecksum = null;
+    // Left null: reporting "saved" on a failed read would be the very error this replaces.
   }
 
   return {

@@ -1,4 +1,3 @@
-import { spawn } from 'node:child_process';
 import { createInterface } from 'node:readline/promises';
 import {
   configDir,
@@ -97,15 +96,7 @@ export async function runInit(deps: InitDeps): Promise<number> {
 async function readGateway(): Promise<string | null> {
   const cmd = gatewayCommand(process.platform);
   try {
-    const stdout = await new Promise<string>((resolve, reject) => {
-      const child = spawn(cmd.command, cmd.args, { stdio: ['ignore', 'pipe', 'ignore'] });
-      let buffer = '';
-      child.stdout.on('data', chunk => {
-        buffer += String(chunk);
-      });
-      child.on('error', reject);
-      child.on('close', () => resolve(buffer));
-    });
+    const { stdout } = await spawnRunner(cmd.command, cmd.args);
     return parseGateway(process.platform, stdout);
   } catch {
     return null;
@@ -114,7 +105,6 @@ async function readGateway(): Promise<string | null> {
 
 interface LineSource {
   ask(question: string, echo: boolean): Promise<string>;
-  close(): void;
 }
 
 /**
@@ -130,15 +120,16 @@ function readSecret(question: string): Promise<string> {
     const { stdin, stdout } = process;
     stdout.write(question);
 
-    const wasRaw = stdin.isRaw === true;
-    if (stdin.isTTY) stdin.setRawMode(true);
+    // Only reached from a terminal, so stdin is a TTY here.
+    const wasRaw = stdin.isRaw;
+    stdin.setRawMode(true);
     stdin.resume();
 
     let secret = '';
 
     const stop = (): void => {
       stdin.off('data', onData);
-      if (stdin.isTTY) stdin.setRawMode(wasRaw);
+      stdin.setRawMode(wasRaw);
       stdin.pause();
       stdout.write('\n');
     };
@@ -163,7 +154,7 @@ function readSecret(question: string): Promise<string> {
           default:
             // Skip the rest of the control range, including escape sequences
             // from arrow keys, which would otherwise land in the password.
-            if (char >= ' ' && char !== '\u007f') secret += char;
+            if (char >= ' ') secret += char;
         }
       }
     };
@@ -189,8 +180,7 @@ function terminalSource(): LineSource {
       } finally {
         rl.close();
       }
-    },
-    close: () => {}
+    }
   };
 }
 
@@ -214,8 +204,7 @@ async function pipedSource(): Promise<LineSource> {
       index += 1;
       process.stdout.write('\n');
       return line.trim();
-    },
-    close: () => {}
+    }
   };
 }
 
@@ -230,31 +219,27 @@ export async function runInitFromTerminal(argv: readonly string[]): Promise<numb
   const source = process.stdin.isTTY ? terminalSource() : await pipedSource();
   const dir = configDir(process.platform, process.env);
 
-  try {
-    return await runInit({
-      configDir: dir,
-      profile,
-      prompt: (question, fallback) => source.ask(`${question} [${fallback}]: `, true),
-      hidden: question => source.ask(`${question}: `, false),
-      out: line => process.stdout.write(`${line}\n`),
-      store: createSecretStore(process.platform, spawnRunner, dir),
-      discoverGateway: readGateway,
-      identify: host => identifyRouter(host),
-      verify: async (host, login, password) => {
-        try {
-          const caps = await createClient({ host, login, password }).capabilities();
-          return {
-            ok: true,
-            model: caps.model,
-            firmware: caps.firmware,
-            components: caps.components.size
-          };
-        } catch (error) {
-          return { ok: false, reason: (error as Error).message.slice(0, 120) };
-        }
+  return runInit({
+    configDir: dir,
+    profile,
+    prompt: (question, fallback) => source.ask(`${question} [${fallback}]: `, true),
+    hidden: question => source.ask(`${question}: `, false),
+    out: line => process.stdout.write(`${line}\n`),
+    store: createSecretStore(process.platform, spawnRunner, dir),
+    discoverGateway: readGateway,
+    identify: identifyRouter,
+    verify: async (host, login, password) => {
+      try {
+        const caps = await createClient({ host, login, password }).capabilities();
+        return {
+          ok: true,
+          model: caps.model,
+          firmware: caps.firmware,
+          components: caps.components.size
+        };
+      } catch (error) {
+        return { ok: false, reason: (error as Error).message.slice(0, 120) };
       }
-    });
-  } finally {
-    source.close();
-  }
+    }
+  });
 }

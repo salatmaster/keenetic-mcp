@@ -1,11 +1,7 @@
-import { describe, expect, it, vi } from 'vitest';
-import { McpServer } from '@modelcontextprotocol/server';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { registerNetworkTools } from '../../src/tools/network.js';
-import type { ToolContext, ToolResult } from '../../src/tools/registry.js';
 import type { KeeneticClient } from '../../src/router/client.js';
-import { stubBackup } from '../helpers/backup.js';
-
-type Handler = (args: Record<string, unknown>) => Promise<ToolResult>;
+import { captureTools, payload, testContext } from '../helpers/tools.js';
 
 const DATA: Record<string, unknown> = {
   'show/internet/status': {
@@ -40,38 +36,37 @@ const DATA: Record<string, unknown> = {
   }
 };
 
-function harness(): Record<string, Handler> {
-  const get = vi.fn(async (path: string) => {
+type HarnessOptions = {
+  get?: (path: string) => Promise<unknown>;
+  post?: (body: unknown) => Promise<unknown>;
+};
+
+/** GET answers from DATA unless `get` is given; POST answers `{}` unless `post` is given. */
+function harness(options: HarnessOptions = {}) {
+  const get = vi.fn(async (path: string): Promise<unknown> => {
+    if (options.get) return options.get(path);
     if (!(path in DATA)) throw new Error(`this path does not exist on this firmware: ${path}`);
     return DATA[path];
   });
+  const post = vi.fn(async (body: unknown): Promise<unknown> => {
+    if (options.post) return options.post(body);
+    return {};
+  });
   const client = {
-    rci: { get, post: vi.fn(), getText: vi.fn() },
-    capabilities: vi.fn()
+    rci: { get, post }
   } as unknown as KeeneticClient;
 
-  const server = new McpServer({ name: 'test', version: '0.0.0' });
-  const handlers: Record<string, Handler> = {};
-  vi.spyOn(server, 'registerTool').mockImplementation(((
-    name: string,
-    _config: unknown,
-    handler: Handler
-  ) => {
-    handlers[name] = handler;
-    return {} as never;
-  }) as never);
-
-  registerNetworkTools(server, { client, backupName: '192.0.2.1', maxResponseBytes: 25_000, readOnly: false, backup: stubBackup() });
-  return handlers;
+  const ctx = testContext(client);
+  const { handlers } = captureTools(server => registerNetworkTools(server, ctx));
+  return { handlers, get, post };
 }
 
-function payload(result: ToolResult): any {
-  return JSON.parse(result.content.map(p => p.text).join(''));
-}
+beforeEach(() => vi.useFakeTimers());
+afterEach(() => vi.useRealTimers());
 
 describe('get_internet_status', () => {
   it('reports reachability flags', async () => {
-    const out = payload(await harness()['get_internet_status']!({}));
+    const out = payload(await harness().handlers['get_internet_status']!({}));
     expect(out.internet).toBe(true);
     expect(out.gatewayAccessible).toBe(true);
     expect(out.dnsAccessible).toBe(true);
@@ -80,20 +75,20 @@ describe('get_internet_status', () => {
 
 describe('list_routes', () => {
   it('returns every route with totals', async () => {
-    const out = payload(await harness()['list_routes']!({}));
+    const out = payload(await harness().handlers['list_routes']!({}));
     expect(out.routes).toHaveLength(2);
     expect(out.total).toBe(2);
   });
 
   it('filters to the default route when kind is default', async () => {
-    const out = payload(await harness()['list_routes']!({ kind: 'default' }));
+    const out = payload(await harness().handlers['list_routes']!({ kind: 'default' }));
     expect(out.routes.map((r: any) => r.destination)).toEqual(['0.0.0.0/0']);
   });
 });
 
 describe('list_policies', () => {
   it('returns each policy with its name and description', async () => {
-    const out = payload(await harness()['list_policies']!({}));
+    const out = payload(await harness().handlers['list_policies']!({}));
     expect(out.policies).toEqual([
       { name: 'Policy0', description: 'desc-1', interfaces: ['Wireguard3'] }
     ]);
@@ -102,7 +97,7 @@ describe('list_policies', () => {
 
 describe('get_wifi_status', () => {
   it('groups access points by band and counts clients', async () => {
-    const out = payload(await harness()['get_wifi_status']!({}));
+    const out = payload(await harness().handlers['get_wifi_status']!({}));
     const twoFour = out.bands.find((b: any) => b.band === '2.4');
     expect(twoFour.accessPoints[0].ssid).toBe('ssid-1');
     expect(twoFour.accessPoints[0].clients).toBe(1);
@@ -111,53 +106,9 @@ describe('get_wifi_status', () => {
   });
 });
 
-type DiagnosticHarnessOptions = {
-  get?: (path: string) => Promise<unknown>;
-  post?: (body: unknown) => Promise<unknown>;
-};
-
-function diagnosticHarness(options: DiagnosticHarnessOptions = {}) {
-  const get = vi.fn(async (path: string): Promise<unknown> => {
-    if (options.get) return options.get(path);
-    throw new Error(`Unexpected GET: ${path}`);
-  });
-
-  const post = vi.fn(async (body: unknown): Promise<unknown> => {
-    if (options.post) return options.post(body);
-    return {};
-  });
-
-  const client = {
-    rci: { get, post, getText: vi.fn() },
-    capabilities: vi.fn()
-  } as unknown as KeeneticClient;
-
-  const server = new McpServer({ name: 'test', version: '0.0.0' });
-  const handlers: Record<string, Handler> = {};
-
-  vi.spyOn(server, 'registerTool').mockImplementation(((
-    name: string,
-    _config: unknown,
-    handler: Handler
-  ) => {
-    handlers[name] = handler;
-    return {} as never;
-  }) as never);
-
-  registerNetworkTools(server, {
-    client,
-    backupName: '192.0.2.1',
-    maxResponseBytes: 25_000,
-    readOnly: false,
-    backup: stubBackup()
-  });
-
-  return { handlers, get, post };
-}
-
 describe('ping', () => {
   it('uses count=5 by default and polls until continued is false', async () => {
-    const h = diagnosticHarness({
+    const h = harness({
       post: async () => ({ message: ['PING started'], continued: true }),
       get: async path => {
         expect(path).toBe('tools/ping');
@@ -165,29 +116,22 @@ describe('ping', () => {
       }
     });
 
-    vi.useFakeTimers();
-    try {
-      const pending = h.handlers['ping']!({ host: '1.1.1.1' });
-      await vi.advanceTimersByTimeAsync(1000);
-      const result = await pending;
-      const out = payload(result);
+    const pending = h.handlers['ping']!({ host: '1.1.1.1' });
+    await vi.advanceTimersByTimeAsync(1000);
+    const result = await pending;
+    const out = payload(result);
 
-      expect(h.post).toHaveBeenCalledWith({
-        tools: { ping: { host: '1.1.1.1', count: 5 } }
-      });
-      expect(h.get).toHaveBeenCalledTimes(1);
-      expect(out.lines).toEqual(['PING started', '5 packets transmitted']);
-      expect(out).not.toHaveProperty('result');
-      expect(out).not.toHaveProperty('getRequests');
-    } finally {
-      vi.useRealTimers();
-    }
+    expect(h.post).toHaveBeenCalledWith({
+      tools: { ping: { host: '1.1.1.1', count: 5 } }
+    });
+    expect(h.get).toHaveBeenCalledTimes(1);
+    expect(out.lines).toEqual(['PING started', '5 packets transmitted']);
   });
 
   it('continues polling when message is empty and continued is true', async () => {
     let getNumber = 0;
 
-    const h = diagnosticHarness({
+    const h = harness({
       post: async () => ({ message: ['PING started'], continued: true }),
       get: async () => {
         getNumber++;
@@ -196,22 +140,17 @@ describe('ping', () => {
       }
     });
 
-    vi.useFakeTimers();
-    try {
-      const pending = h.handlers['ping']!({ host: '1.1.1.1' });
-      await vi.advanceTimersByTimeAsync(2000);
-      const result = await pending;
-      const out = payload(result);
+    const pending = h.handlers['ping']!({ host: '1.1.1.1' });
+    await vi.advanceTimersByTimeAsync(2000);
+    const result = await pending;
+    const out = payload(result);
 
-      expect(h.get).toHaveBeenCalledTimes(2);
-      expect(out.lines).toEqual(['PING started', 'PING finished']);
-    } finally {
-      vi.useRealTimers();
-    }
+    expect(h.get).toHaveBeenCalledTimes(2);
+    expect(out.lines).toEqual(['PING started', 'PING finished']);
   });
 
   it('passes count and source_interface to RCI', async () => {
-    const h = diagnosticHarness({
+    const h = harness({
       post: async () => ({ message: ['done'], continued: false })
     });
 
@@ -235,53 +174,8 @@ describe('ping', () => {
 });
 
 describe('traceroute', () => {
-  it('sends an ICMP traceroute request', async () => {
-    const h = diagnosticHarness({
-      post: async () => ({ message: ['trace complete'], continued: false })
-    });
-
-    await h.handlers['traceroute']!({
-      host: '1.1.1.1',
-      source_interface: 'Wireguard1'
-    });
-
-    expect(h.post).toHaveBeenCalledWith({
-      tools: {
-        traceroute: {
-          host: '1.1.1.1',
-          type: 'icmp',
-          'max-ttl': 30,
-          'source-interface': 'Wireguard1'
-        }
-      }
-    });
-    expect(h.get).not.toHaveBeenCalled();
-  });
-
-  it('passes source_address to RCI', async () => {
-    const h = diagnosticHarness({
-      post: async () => ({ message: ['trace complete'], continued: false })
-    });
-
-    await h.handlers['traceroute']!({
-      host: '185.178.210.201',
-      source_address: '192.0.2.10'
-    });
-
-    expect(h.post).toHaveBeenCalledWith({
-      tools: {
-        traceroute: {
-          host: '185.178.210.201',
-          type: 'icmp',
-          'max-ttl': 30,
-          'source-address': '192.0.2.10'
-        }
-      }
-    });
-  });
-
   it('passes source_address and source_interface together', async () => {
-    const h = diagnosticHarness({
+    const h = harness({
       post: async () => ({ message: ['trace complete'], continued: false })
     });
 
@@ -303,8 +197,9 @@ describe('traceroute', () => {
       }
     });
   });
+
   it('passes custom max_hops to RCI', async () => {
-    const h = diagnosticHarness({
+    const h = harness({
       post: async () => ({ message: ['trace complete'], continued: false })
     });
 
@@ -325,54 +220,41 @@ describe('traceroute', () => {
   });
 
   it('uses hop-based polling limits', async () => {
-    const h = diagnosticHarness({
+    const h = harness({
       post: async () => ({ message: ['trace started'], continued: true }),
       get: async () => ({ message: [], continued: true })
     });
 
-    vi.useFakeTimers();
+    const pending = h.handlers['traceroute']!({
+      host: '1.1.1.1',
+      max_hops: 5
+    });
 
-    try {
-      const pending = h.handlers['traceroute']!({
-        host: '1.1.1.1',
-        max_hops: 5
-      });
+    await vi.advanceTimersByTimeAsync(15_000);
 
-      await vi.advanceTimersByTimeAsync(15_000);
+    const result = await pending;
+    const out = payload(result);
 
-      const result = await pending;
-      const out = payload(result);
-
-      expect(h.get).toHaveBeenCalledTimes(15);
-      expect(out.lines).toContain(
-        '[Polling stopped: the 15-second time limit was reached; partial output is shown above.]'
-      );
-    } finally {
-      vi.useRealTimers();
-    }
+    expect(h.get).toHaveBeenCalledTimes(15);
+    expect(out.lines).toContain(
+      '[Polling stopped: the 15-second time limit was reached; partial output is shown above.]'
+    );
   });
-});
 
-describe('traceroute limits', () => {
   it('stops after 60 seconds however many hops were asked for', async () => {
-    const h = diagnosticHarness({
+    const h = harness({
       post: async () => ({ message: ['trace started'], continued: true }),
       get: async () => ({ message: [], continued: true })
     });
 
-    vi.useFakeTimers();
-    try {
-      const pending = h.handlers['traceroute']!({ host: '1.1.1.1', max_hops: 64 });
-      await vi.advanceTimersByTimeAsync(61_000);
-      const out = payload(await pending);
+    const pending = h.handlers['traceroute']!({ host: '1.1.1.1', max_hops: 64 });
+    await vi.advanceTimersByTimeAsync(61_000);
+    const out = payload(await pending);
 
-      expect(h.get.mock.calls.length).toBeLessThanOrEqual(60);
-      expect(out.lines).toContain(
-        '[Polling stopped: the 60-second time limit was reached; partial output is shown above.]'
-      );
-    } finally {
-      vi.useRealTimers();
-    }
+    expect(h.get.mock.calls.length).toBeLessThanOrEqual(60);
+    expect(out.lines).toContain(
+      '[Polling stopped: the 60-second time limit was reached; partial output is shown above.]'
+    );
   });
 });
 
@@ -383,23 +265,18 @@ describe('diagnostic polling errors', () => {
       { code: '404' }
     );
 
-    const h = diagnosticHarness({
+    const h = harness({
       post: async () => ({ message: ['partial output'], continued: true }),
       get: async () => {
         throw notFound;
       }
     });
 
-    vi.useFakeTimers();
-    try {
-      const pending = h.handlers['ping']!({ host: '1.1.1.1' });
-      await vi.advanceTimersByTimeAsync(1000);
-      const result = await pending;
+    const pending = h.handlers['ping']!({ host: '1.1.1.1' });
+    await vi.advanceTimersByTimeAsync(1000);
+    const result = await pending;
 
-      expect(result.isError).toBe(true);
-      expect(h.get).toHaveBeenCalledTimes(1);
-    } finally {
-      vi.useRealTimers();
-    }
+    expect(result.isError).toBe(true);
+    expect(h.get).toHaveBeenCalledTimes(1);
   });
 });

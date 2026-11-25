@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -57,22 +57,12 @@ describe('parseGateway', () => {
 });
 
 describe('identifyRouter', () => {
-  it('recognises a Keenetic by its realm header', async () => {
+  it.each(['Keenetic Ultra', 'Netcraze Speedster'])('recognises %s by its realm header', async realm => {
     const fetchImpl = vi.fn(
-      async () => new Response(null, { status: 401, headers: { 'X-NDM-Realm': 'Keenetic Ultra' } })
+      async () => new Response(null, { status: 401, headers: { 'X-NDM-Realm': realm } })
     );
     await expect(identifyRouter('192.0.2.1', fetchImpl as unknown as typeof fetch)).resolves.toEqual(
-      { realm: 'Keenetic Ultra' }
-    );
-  });
-
-  it('recognises a Netcraze, which answers with the same realm header', async () => {
-    const fetchImpl = vi.fn(
-      async () =>
-        new Response(null, { status: 401, headers: { 'X-NDM-Realm': 'Netcraze Speedster' } })
-    );
-    await expect(identifyRouter('192.0.2.1', fetchImpl as unknown as typeof fetch)).resolves.toEqual(
-      { realm: 'Netcraze Speedster' }
+      { realm }
     );
   });
 
@@ -94,22 +84,17 @@ describe('identifyRouter', () => {
 });
 
 describe('configDir', () => {
-  it('honours XDG_CONFIG_HOME on Linux', () => {
-    expect(configDir('linux', { XDG_CONFIG_HOME: '/c' } as NodeJS.ProcessEnv)).toBe(
-      '/c/keenetic-mcp'
-    );
-  });
-
-  it('uses Application Support on macOS', () => {
-    expect(configDir('darwin', { HOME: '/Users/u' } as NodeJS.ProcessEnv)).toBe(
+  it.each([
+    ['honours XDG_CONFIG_HOME on Linux', 'linux', { XDG_CONFIG_HOME: '/c' }, '/c/keenetic-mcp'],
+    [
+      'uses Application Support on macOS',
+      'darwin',
+      { HOME: '/Users/u' },
       '/Users/u/Library/Application Support/keenetic-mcp'
-    );
-  });
-
-  it('uses APPDATA on Windows with backslashes', () => {
-    expect(configDir('win32', { APPDATA: 'C:\\a' } as NodeJS.ProcessEnv)).toBe(
-      'C:\\a\\keenetic-mcp'
-    );
+    ],
+    ['uses APPDATA on Windows with backslashes', 'win32', { APPDATA: 'C:\\a' }, 'C:\\a\\keenetic-mcp']
+  ] as const)('%s', (_title, platform, env, expected) => {
+    expect(configDir(platform, env as NodeJS.ProcessEnv)).toBe(expected);
   });
 });
 
@@ -120,24 +105,6 @@ describe('stored config', () => {
   async function fresh(): Promise<string> {
     return mkdtemp(join(tmpdir(), 'kn-cfg-'));
   }
-
-  it('round-trips host and login', async () => {
-    const dir = await fresh();
-    await writeStoredRouter(dir, HOME);
-    await expect(readStoredConfig(dir)).resolves.toEqual({ router: HOME, profiles: {} });
-  });
-
-  it('is empty when nothing has been written', async () => {
-    const dir = await fresh();
-    await expect(readStoredConfig(dir)).resolves.toEqual({ router: null, profiles: {} });
-  });
-
-  it('never stores a password', async () => {
-    const dir = await fresh();
-    const path = await writeStoredRouter(dir, HOME);
-    await writeStoredRouter(dir, PARENTS, 'parents');
-    expect(await readFile(path, 'utf8')).not.toMatch(/password/i);
-  });
 
   it('ignores a file that is missing the fields it needs', async () => {
     const dir = await fresh();

@@ -7,7 +7,6 @@ describe('capList', () => {
   it('passes a small list through untouched', () => {
     const out = capList([{ a: 1 }, { a: 2 }], 50, 25_000);
     expect(out.items).toHaveLength(2);
-    expect(out.truncated).toBe(false);
     expect(out.total).toBe(2);
     expect(out.note).toBeUndefined();
   });
@@ -16,14 +15,12 @@ describe('capList', () => {
     const out = capList(wide(100), 10, 25_000);
     expect(out.items).toHaveLength(10);
     expect(out.total).toBe(100);
-    expect(out.truncated).toBe(true);
   });
 
   it('shrinks further when the byte ceiling is the binding constraint', () => {
     const out = capList(wide(100), 100, 2_000);
     expect(out.items.length).toBeLessThan(100);
     expect(JSON.stringify(out.items).length).toBeLessThanOrEqual(2_000);
-    expect(out.truncated).toBe(true);
   });
 
   it('states real numbers in the note so the model can narrow the query', () => {
@@ -36,12 +33,11 @@ describe('capList', () => {
   it('returns at least one item even when that item alone exceeds the ceiling', () => {
     const out = capList([{ pad: 'x'.repeat(10_000) }], 50, 100);
     expect(out.items).toHaveLength(1);
-    expect(out.truncated).toBe(true);
   });
 
   it('handles an empty list', () => {
     const out = capList([], 50, 25_000);
-    expect(out).toMatchObject({ items: [], shown: 0, total: 0, truncated: false });
+    expect(out).toMatchObject({ items: [], shown: 0, total: 0 });
   });
 });
 

@@ -2,10 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/server';
 import * as z from 'zod/v4';
 import { capList } from '../shape/budget.js';
 import { guard, ok, READ_ONLY, type ToolContext } from './registry.js';
-
-function asRecord(value: unknown): Record<string, unknown> {
-  return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {};
-}
+import { asRecord, str } from '../shape/record.js';
 
 export function registerNetworkTools(server: McpServer, ctx: ToolContext): void {
   server.registerTool(
@@ -56,13 +53,9 @@ export function registerNetworkTools(server: McpServer, ctx: ToolContext): void 
       const selected =
         kind === 'default' ? routes.filter(r => r['destination'] === '0.0.0.0/0') : routes;
 
-      const capped = capList(selected, limit ?? 100, ctx.maxResponseBytes);
-      return ok({
-        routes: capped.items,
-        shown: capped.shown,
-        total: capped.total,
-        ...(capped.note ? { note: capped.note } : {})
-      });
+      // JSON.stringify leaves `note` out when there is none.
+      const { items, shown, total, note } = capList(selected, limit ?? 100, ctx.maxResponseBytes);
+      return ok({ routes: items, shown, total, note });
     })
   );
 
@@ -87,7 +80,7 @@ export function registerNetworkTools(server: McpServer, ctx: ToolContext): void 
           .filter((id): id is string => typeof id === 'string');
         return {
           name,
-          description: typeof policy['description'] === 'string' ? policy['description'] : '',
+          description: str(policy, 'description'),
           interfaces
         };
       });
@@ -117,7 +110,7 @@ export function registerNetworkTools(server: McpServer, ctx: ToolContext): void 
 
       const clientsPerAp = new Map<string, number>();
       for (const station of stations) {
-        const ap = typeof station['ap'] === 'string' ? station['ap'] : '';
+        const ap = str(station, 'ap');
         if (ap) clientsPerAp.set(ap, (clientsPerAp.get(ap) ?? 0) + 1);
       }
 
@@ -136,17 +129,17 @@ export function registerNetworkTools(server: McpServer, ctx: ToolContext): void 
               const ap = asRecord(apValue);
               return {
                 id: apId,
-                ssid: typeof ap['ssid'] === 'string' ? ap['ssid'] : '',
-                link: typeof ap['link'] === 'string' ? ap['link'] : '',
-                state: typeof ap['state'] === 'string' ? ap['state'] : '',
+                ssid: str(ap, 'ssid'),
+                link: str(ap, 'link'),
+                state: str(ap, 'state'),
                 clients: clientsPerAp.get(apId) ?? 0
               };
             });
 
           return {
             radio: masterId,
-            band: typeof master['band'] === 'string' ? master['band'] : '',
-            description: typeof master['description'] === 'string' ? master['description'] : '',
+            band: str(master, 'band'),
+            description: str(master, 'description'),
             accessPoints
           };
         });
@@ -170,19 +163,6 @@ export function registerNetworkTools(server: McpServer, ctx: ToolContext): void 
     .optional()
     .describe('Any existing Keenetic interface name.');
 
-  const sourceAddressSchema = z
-    .ipv4()
-    .optional()
-    .describe('IPv4 address to use as the source address for traceroute.');
-
-  const maxHopsSchema = z
-    .number()
-    .int()
-    .min(1)
-    .max(64)
-    .optional()
-    .describe('Maximum number of traceroute hops (1-64, default: 30).');
-
   function appendMessages(
     target: string[],
     response: unknown,
@@ -201,43 +181,28 @@ export function registerNetworkTools(server: McpServer, ctx: ToolContext): void 
     return source['continued'] === true;
   }
 
+  /** Starts the command, then polls its output once a second until it ends or time runs out. */
   async function runDiagnostic(
     command: 'ping' | 'traceroute',
     args: Record<string, unknown>,
-    getPath: 'tools/ping' | 'tools/traceroute',
-    options?: {
-      maxPolls?: number;
-      timeoutMs?: number;
-    }
+    timeoutMs: number
   ) {
-    const maxPolls = options?.maxPolls ?? 120;
-    const timeoutMs = options?.timeoutMs ?? 60000;
-
     const response = await ctx.client.rci.post({ tools: { [command]: args } });
     const lines: string[] = [];
     let continued = appendMessages(lines, response, command);
-    let polls = 0;
     const startedAt = Date.now();
 
-    while (
-      continued &&
-      polls < maxPolls &&
-      Date.now() - startedAt < timeoutMs
-    ) {
+    while (continued && Date.now() - startedAt < timeoutMs) {
       await new Promise(resolve => setTimeout(resolve, 1000));
-      polls++;
-
-      const next = await ctx.client.rci.get(getPath);
+      const next = await ctx.client.rci.get(`tools/${command}`);
       continued = appendMessages(lines, next, command);
     }
 
     if (continued) {
-      const reason =
-        polls >= maxPolls
-          ? `the ${maxPolls} GET request limit was reached`
-          : `the ${timeoutMs / 1000}-second time limit was reached`;
-
-      lines.push(`[Polling stopped: ${reason}; partial output is shown above.]`);
+      lines.push(
+        `[Polling stopped: the ${timeoutMs / 1000}-second time limit was reached; ` +
+          'partial output is shown above.]'
+      );
     }
 
     return ok({
@@ -262,7 +227,7 @@ export function registerNetworkTools(server: McpServer, ctx: ToolContext): void 
       const args: Record<string, unknown> = { host, count: count ?? 5 };
       if (source_interface) args['source-interface'] = source_interface;
 
-      return runDiagnostic('ping', args, 'tools/ping');
+      return runDiagnostic('ping', args, 60_000);
     })
   );
 
@@ -274,8 +239,17 @@ export function registerNetworkTools(server: McpServer, ctx: ToolContext): void 
       inputSchema: {
         host: hostSchema,
         source_interface: sourceInterfaceSchema,
-        source_address: sourceAddressSchema,
-        max_hops: maxHopsSchema
+        source_address: z
+          .ipv4()
+          .optional()
+          .describe('IPv4 address to use as the source address for traceroute.'),
+        max_hops: z
+          .number()
+          .int()
+          .min(1)
+          .max(64)
+          .optional()
+          .describe('Maximum number of traceroute hops (1-64, default: 30).')
       },
       annotations: READ_ONLY
     },
@@ -291,12 +265,9 @@ export function registerNetworkTools(server: McpServer, ctx: ToolContext): void 
       if (source_interface) args['source-interface'] = source_interface;
       if (source_address) args['source-address'] = source_address;
 
-      return runDiagnostic('traceroute', args, 'tools/traceroute', {
-        maxPolls: hops * 4,
-        // About 3 s per hop on a real router, but a tool call that runs past
-        // a minute is one most MCP clients have already given up on.
-        timeoutMs: Math.min(hops * 3000, 60_000)
-      });
+      // About 3 s per hop on a real router, but a tool call that runs past
+      // a minute is one most MCP clients have already given up on.
+      return runDiagnostic('traceroute', args, Math.min(hops * 3000, 60_000));
     })
   );
 }

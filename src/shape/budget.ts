@@ -2,12 +2,7 @@ export interface CappedList<T> {
   items: T[];
   shown: number;
   total: number;
-  truncated: boolean;
   note?: string;
-}
-
-function byteLength(value: unknown): number {
-  return Buffer.byteLength(JSON.stringify(value) ?? '', 'utf8');
 }
 
 /**
@@ -17,22 +12,15 @@ function byteLength(value: unknown): number {
  */
 export function capList<T>(items: readonly T[], limit: number, maxBytes: number): CappedList<T> {
   const total = items.length;
-  let kept = items.slice(0, Math.max(0, limit));
+  let kept = items.slice(0, limit);
 
-  while (kept.length > 1 && byteLength(kept) > maxBytes) {
+  while (kept.length > 1 && Buffer.byteLength(JSON.stringify(kept)) > maxBytes) {
     // Halve rather than step down one at a time: a 455-row NAT table would
     // otherwise re-serialise hundreds of times.
     kept = kept.slice(0, Math.max(1, Math.floor(kept.length / 2)));
   }
 
-  const truncated = kept.length < total || (kept.length > 0 && byteLength(kept) > maxBytes);
-
-  const result: CappedList<T> = {
-    items: kept,
-    shown: kept.length,
-    total,
-    truncated
-  };
+  const result: CappedList<T> = { items: kept, shown: kept.length, total };
   if (kept.length < total) {
     result.note =
       `Showing ${kept.length} of ${total} entries. Narrow the query with the ` +

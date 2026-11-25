@@ -20,7 +20,7 @@ const hmac = (key: Buffer, message: string): Buffer =>
  * from the client, so the two can disagree. It knows `routerPassword`, which
  * may differ from the one the client was given.
  */
-function fakeRouter(opts: { routerPassword?: string; offersNdw2?: boolean; checksProof?: boolean } = {}) {
+function fakeRouter(opts: { routerPassword?: string; checksProof?: boolean } = {}) {
   const salted = crypto.argon2Sync('argon2id', {
     message: opts.routerPassword ?? PASSWORD,
     nonce: Buffer.from(SALT, 'base64'),
@@ -58,14 +58,12 @@ function fakeRouter(opts: { routerPassword?: string; offersNdw2?: boolean; check
         : new Response(null, { status: 401 });
     }
     if (init?.method !== 'POST') {
-      const schemes = ['x-ndw4-interactive endpoint="/auth" data="e30="'];
-      if (opts.offersNdw2 !== false) {
-        schemes.push('x-ndw2-interactive realm="Keenetic Test" challenge="abc" session_cookie="Xk3"');
-      }
       return new Response(null, {
         status: 401,
         headers: {
-          'WWW-Authenticate': schemes.join(', '),
+          'WWW-Authenticate':
+            'x-ndw4-interactive endpoint="/auth" data="e30=", ' +
+            'x-ndw2-interactive realm="Keenetic Test" challenge="abc" session_cookie="Xk3"',
           'X-NDM-Realm': 'Keenetic Test',
           'X-NDM-Challenge': 'abc',
           'Set-Cookie': 'Xk3=sid-1; Path=/; Max-Age=20'
@@ -97,7 +95,8 @@ function fakeRouter(opts: { routerPassword?: string; offersNdw2?: boolean; check
     return new Response(null, { status: 200 });
   });
 
-  return { fetchMock, bodies };
+  vi.stubGlobal('fetch', fetchMock);
+  return bodies;
 }
 
 afterEach(() => vi.restoreAllMocks());
@@ -120,8 +119,7 @@ describe('ndw4Endpoint', () => {
 
 describe.skipIf(!hasArgon2)('Session over ndw4', () => {
   it('completes the handshake and replays the request', async () => {
-    const { fetchMock, bodies } = fakeRouter();
-    vi.stubGlobal('fetch', fetchMock);
+    const bodies = fakeRouter();
 
     const session = new Session({ host: '192.0.2.1', login: LOGIN, password: PASSWORD });
     const res = await session.request('GET', '/rci/show/version');
@@ -137,8 +135,7 @@ describe.skipIf(!hasArgon2)('Session over ndw4', () => {
   });
 
   it('reports the error a router puts in its reply', async () => {
-    const { fetchMock, bodies } = fakeRouter({ routerPassword: 'other' });
-    vi.stubGlobal('fetch', fetchMock);
+    const bodies = fakeRouter({ routerPassword: 'other' });
 
     const session = new Session({ host: '192.0.2.1', login: LOGIN, password: PASSWORD });
     await expect(session.request('GET', '/rci/show/version')).rejects.toThrow(/ndw4: bad proof/);
@@ -148,8 +145,7 @@ describe.skipIf(!hasArgon2)('Session over ndw4', () => {
   it('stops before the last step when the router cannot prove it knows the password', async () => {
     // A router that skips checking the client and signs with another password:
     // whoever answered does not know this one, so nothing more is sent.
-    const { fetchMock, bodies } = fakeRouter({ routerPassword: 'other', checksProof: false });
-    vi.stubGlobal('fetch', fetchMock);
+    const bodies = fakeRouter({ routerPassword: 'other', checksProof: false });
 
     const session = new Session({ host: '192.0.2.1', login: LOGIN, password: PASSWORD });
     await expect(session.request('GET', '/rci/show/version')).rejects.toThrow(/did not prove/);

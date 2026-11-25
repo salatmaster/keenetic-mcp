@@ -33,7 +33,7 @@
     "static": false
   },
   {
-    "destination": "5.8.36.3/32",
+    "destination": "203.0.113.53/32",
     "gateway": "192.0.2.14",
     "interface": "GigabitEthernet1",
     "metric": 1000,
@@ -44,7 +44,7 @@
     "static": false
   },
   {
-    "destination": "5.8.38.3/32",
+    "destination": "203.0.113.54/32",
     "gateway": "192.0.2.14",
     "interface": "GigabitEthernet1",
     "metric": 1000,

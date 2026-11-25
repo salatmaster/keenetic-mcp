@@ -23,6 +23,19 @@ function asRecord(value: unknown): Record<string, unknown> {
     : {};
 }
 
+/** Third octet of a 192.168.x.y address, or NaN. */
+function thirdOctet(ip: unknown): number {
+  return typeof ip === 'string' ? Number(ip.split('.')[2]) : NaN;
+}
+
+/** The numbers in names like Policy3 or wlan2. */
+function numbered(names: string[], prefix: string): number[] {
+  return names
+    .filter(name => name.startsWith(prefix))
+    .map(name => Number(name.slice(prefix.length)))
+    .filter(Number.isInteger);
+}
+
 /** The router collapses a single-element list into a bare object. */
 function toArray(value: unknown): unknown[] {
   if (Array.isArray(value)) return value;
@@ -96,11 +109,11 @@ export async function readSwitchPorts(rci: Rci): Promise<SwitchPort[]> {
 export interface RouterInventory {
   ports: SwitchPort[];
   bridgeNumbers: number[];
+  segments: SegmentState[];
   /** Third octet of every 192.168.x.0/24 already in use, from bridges and pools. */
   subnets: number[];
   vlanIds: number[];
   policies: string[];
-  pools: string[];
   wlanKeys: string[];
 }
 
@@ -109,20 +122,20 @@ export async function readInventory(rci: Rci): Promise<RouterInventory> {
   const ports = await readSwitchPorts(rci);
 
   const bridgeNumbers: number[] = [];
+  const segments: SegmentState[] = [];
   const subnets = new Set<number>();
   for (let index = 0; index < PROBE_LIMIT; index += 1) {
-    const raw = await readOptional(rci, `show/rc/interface/Bridge${index}`);
-    if (raw === null) continue;
+    const state = await readSegment(rci, `Bridge${index}`);
+    if (state === null) continue;
     bridgeNumbers.push(index);
-    const address = asRecord(asRecord(raw['ip'])['address'])['address'];
-    const octet = typeof address === 'string' ? Number(address.split('.')[2]) : NaN;
+    segments.push(state);
+    const octet = thirdOctet(state.address);
     if (Number.isInteger(octet)) subnets.add(octet);
   }
 
   const pools = asRecord((await readOptional(rci, 'show/rc/ip/dhcp'))?.['pool']);
   for (const pool of Object.values(pools)) {
-    const begin = asRecord(asRecord(pool)['range'])['begin'];
-    const octet = typeof begin === 'string' ? Number(begin.split('.')[2]) : NaN;
+    const octet = thirdOctet(asRecord(asRecord(pool)['range'])['begin']);
     if (Number.isInteger(octet)) subnets.add(octet);
   }
 
@@ -135,12 +148,20 @@ export async function readInventory(rci: Rci): Promise<RouterInventory> {
   return {
     ports,
     bridgeNumbers,
+    segments,
     subnets: [...subnets].sort((a, b) => a - b),
     vlanIds: [...vlanIds].sort((a, b) => a - b),
     policies: Object.keys(asRecord(await readOptional(rci, 'show/rc/ip/policy'))),
-    pools: Object.keys(pools),
     wlanKeys: Object.keys(asRecord(await readOptional(rci, 'show/rc/mws/wlan')))
   };
+}
+
+/**
+ * The first bridge number nothing uses. Numbering starts at 1, because Bridge0
+ * is the home segment; it never runs out, since only Bridge0-15 are probed.
+ */
+export function nextBridgeNumber(used: number[]): number {
+  return firstFree(used, 1, PROBE_LIMIT, 'bridge');
 }
 
 function firstFree(used: Iterable<number>, from: number, limit: number, what: string): number {
@@ -157,7 +178,6 @@ export interface Allocation {
   /** The subinterface that makes the segment a VLAN, and so visible in the UI. */
   vlanInterface: string;
   address: string;
-  mask: string;
   dhcpBegin: string;
   dhcpEnd: string;
   poolName: string;
@@ -180,7 +200,7 @@ export interface AllocationRequest {
  * ordinary policy that may or may not exist.
  */
 export function allocate(inventory: RouterInventory, request: AllocationRequest): Allocation {
-  const bridgeNumber = firstFree(inventory.bridgeNumbers, 1, PROBE_LIMIT, 'bridge');
+  const bridgeNumber = nextBridgeNumber(inventory.bridgeNumbers);
   const subnet =
     request.subnet ?? firstFree(inventory.subnets, 2, 250, '192.168.x.0/24 subnet');
 
@@ -192,19 +212,14 @@ export function allocate(inventory: RouterInventory, request: AllocationRequest)
   }
 
   const vlanId = firstFree(inventory.vlanIds, 2, 4000, 'VLAN id');
-  const usedPolicyNumbers = inventory.policies
-    .map(name => Number(name.replace(/^Policy/, '')))
-    .filter(Number.isInteger);
-  const usedWlanNumbers = inventory.wlanKeys
-    .map(key => Number(key.replace(/^wlan/, '')))
-    .filter(Number.isInteger);
+  const usedPolicyNumbers = numbered(inventory.policies, 'Policy');
+  const usedWlanNumbers = numbered(inventory.wlanKeys, 'wlan');
 
   return {
     bridge: `Bridge${bridgeNumber}`,
     vlanId,
     vlanInterface: `GigabitEthernet0/Vlan${vlanId}`,
     address: `192.168.${subnet}.1`,
-    mask: '255.255.255.0',
     dhcpBegin: `192.168.${subnet}.${DHCP_FIRST}`,
     dhcpEnd: `192.168.${subnet}.${DHCP_LAST}`,
     poolName: `${POOL_PREFIX}${bridgeNumber}`,
@@ -299,7 +314,7 @@ export interface SegmentRequest {
   psk: string | null;
 }
 
-/** Every step, in the order the router accepts them. Exported for the teardown. */
+/** Every step, in the order the router accepts them. */
 function buildSteps(allocation: Allocation, ports: SwitchPort[], request: SegmentRequest): {
   vlan: string[];
   trunk: string[];
@@ -321,7 +336,7 @@ function buildSteps(allocation: Allocation, ports: SwitchPort[], request: Segmen
       `interface ${allocation.bridge} description ${request.name}`,
       `interface ${allocation.bridge} security-level protected`,
       `interface ${allocation.bridge} include ${allocation.vlanInterface}`,
-      `interface ${allocation.bridge} ip address ${allocation.address} ${allocation.mask}`,
+      `interface ${allocation.bridge} ip address ${allocation.address} 255.255.255.0`,
       `interface ${allocation.bridge} up`,
       `ip nat ${allocation.bridge}`
     ],
@@ -391,12 +406,6 @@ export async function teardownSegment(rci: Rci, target: TeardownTarget): Promise
   return failed;
 }
 
-export interface CreatedSegment {
-  allocation: Allocation;
-  state: SegmentState;
-  ports: string[];
-}
-
 /**
  * Builds a UI-visible segment, or leaves the router as it found it.
  *
@@ -411,7 +420,7 @@ export async function createSegment(
   allocation: Allocation,
   ports: SwitchPort[],
   request: SegmentRequest
-): Promise<CreatedSegment> {
+): Promise<SegmentState> {
   const steps = buildSteps(allocation, ports, request);
 
   try {
@@ -468,7 +477,7 @@ export async function createSegment(
       );
     }
 
-    return { allocation, state, ports: ports.map(port => port.label) };
+    return state;
   } catch (error) {
     const failed = await teardownSegment(rci, {
       bridge: allocation.bridge,

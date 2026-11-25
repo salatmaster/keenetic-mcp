@@ -7,8 +7,6 @@ const ROOT = new URL('../', import.meta.url);
 /** What package.json carries in git, so a checkout never claims to be a release. */
 export const DEV_VERSION = '0.0.0-dev';
 
-let envLoaded = false;
-
 /**
  * Loads a `.env` sitting next to package.json, if there is one.
  *
@@ -22,9 +20,6 @@ let envLoaded = false;
  * file, so a real `KEENETIC_PASSWORD` is never shadowed by a stale one on disk.
  */
 export function loadLocalEnv(): void {
-  if (envLoaded) return;
-  envLoaded = true;
-
   const file = fileURLToPath(new URL('.env', ROOT));
   if (existsSync(file)) process.loadEnvFile(file);
 }
@@ -43,8 +38,6 @@ export function loadLocalEnv(): void {
  * version you are not running.
  */
 export function resolveVersion(): string {
-  loadLocalEnv();
-
   const override = process.env['KEENETIC_MCP_VERSION'];
   if (override !== undefined && override.length > 0) return override;
 

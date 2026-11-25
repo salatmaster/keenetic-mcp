@@ -37,12 +37,12 @@ export function ok(payload: unknown, maxBytes?: number): ToolResult {
  * it must say what happened and what to do next - never a bare stack trace.
  */
 export function fail(error: unknown): ToolResult {
+  const message = error instanceof Error ? error.message : String(error);
+  // A KeeneticError already says what to do next.
   const text =
     error instanceof KeeneticError
-      ? error.message
-      : error instanceof Error
-        ? `${error.message} Retry, or call get_system_info to check connectivity.`
-        : `${String(error)} Retry, or call get_system_info to check connectivity.`;
+      ? message
+      : `${message} Retry, or call get_system_info to check connectivity.`;
   return { content: [{ type: 'text', text }], isError: true };
 }
 

@@ -1,5 +1,6 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join, posix, win32 } from 'node:path';
+import { asRecord } from '../shape/record.js';
 
 export function gatewayCommand(platform: NodeJS.Platform): { command: string; args: string[] } {
   if (platform === 'darwin') return { command: 'route', args: ['-n', 'get', 'default'] };
@@ -84,8 +85,7 @@ function asRouter(value: unknown): StoredRouter | null {
 
 async function readFileObject(dir: string): Promise<Record<string, unknown>> {
   try {
-    const parsed: unknown = JSON.parse(await readFile(join(dir, FILE), 'utf8'));
-    return typeof parsed === 'object' && parsed !== null ? (parsed as Record<string, unknown>) : {};
+    return asRecord(JSON.parse(await readFile(join(dir, FILE), 'utf8')));
   } catch {
     return {};
   }
@@ -93,10 +93,7 @@ async function readFileObject(dir: string): Promise<Record<string, unknown>> {
 
 export async function readStoredConfig(dir: string): Promise<StoredConfig> {
   const raw = await readFileObject(dir);
-  const entries =
-    typeof raw['profiles'] === 'object' && raw['profiles'] !== null
-      ? Object.entries(raw['profiles'])
-      : [];
+  const entries = Object.entries(asRecord(raw['profiles']));
   // fromEntries defines own properties, so a "__proto__" key stays a key.
   const profiles = Object.fromEntries(
     entries.flatMap(([name, value]) => {
@@ -124,9 +121,7 @@ export async function writeStoredRouter(
   const raw = await readFileObject(dir);
   const entry = { host: router.host, login: router.login };
   if (profile) {
-    const profiles =
-      typeof raw['profiles'] === 'object' && raw['profiles'] !== null ? raw['profiles'] : {};
-    raw['profiles'] = { ...profiles, [profile]: entry };
+    raw['profiles'] = { ...asRecord(raw['profiles']), [profile]: entry };
   } else {
     Object.assign(raw, entry);
   }

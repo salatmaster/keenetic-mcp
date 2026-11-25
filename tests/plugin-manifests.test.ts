@@ -1,17 +1,14 @@
 import { readFile } from 'node:fs/promises';
-import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 const ROOT = new URL('../', import.meta.url);
 
-async function json<T = Record<string, unknown>>(relative: string): Promise<T> {
+async function json<T>(relative: string): Promise<T> {
   return JSON.parse(await readFile(new URL(relative, ROOT), 'utf8')) as T;
 }
 
 interface Manifest {
   name: string;
-  version: string;
-  description: string;
   license?: string;
   skills?: string;
   mcpServers?: string;

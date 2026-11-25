@@ -14,7 +14,6 @@ export interface SecretStore {
   /** Returns a human-readable description of where the secret went. */
   save(account: string, secret: string): Promise<string>;
   read(account: string): Promise<string | null>;
-  remove(account: string): Promise<void>;
 }
 
 /**
@@ -48,33 +47,23 @@ export const spawnRunner: Runner = (command, args, stdin) =>
 
 export function keychainCommand(
   platform: NodeJS.Platform,
-  op: 'save' | 'read' | 'remove',
+  op: 'save' | 'read',
   account: string
-): KeychainCommand | null {
+): KeychainCommand {
   if (platform === 'darwin') {
-    if (op === 'save') {
-      return {
-        command: 'security',
-        args: ['add-generic-password', '-U', '-a', account, '-s', SERVICE, '-w'],
-        secretVia: 'argv'
-      };
-    }
-    if (op === 'read') {
-      return {
-        command: 'security',
-        args: ['find-generic-password', '-a', account, '-s', SERVICE, '-w'],
-        secretVia: 'argv'
-      };
-    }
+    const target = ['-a', account, '-s', SERVICE];
     return {
       command: 'security',
-      args: ['delete-generic-password', '-a', account, '-s', SERVICE],
+      args:
+        op === 'save'
+          ? ['add-generic-password', '-U', ...target, '-w']
+          : ['find-generic-password', ...target, '-w'],
       secretVia: 'argv'
     };
   }
 
   if (platform === 'win32') {
-    const verb = op === 'save' ? 'Write' : op === 'read' ? 'Read' : 'Remove';
+    const verb = op === 'save' ? 'Write' : 'Read';
     return {
       command: 'powershell',
       args: ['-NoProfile', '-Command', `${verb}-KeeneticSecret -Account '${account}'`],
@@ -82,23 +71,10 @@ export function keychainCommand(
     };
   }
 
-  if (op === 'save') {
-    return {
-      command: 'secret-tool',
-      args: ['store', '--label', SERVICE, 'service', SERVICE, 'account', account],
-      secretVia: 'stdin'
-    };
-  }
-  if (op === 'read') {
-    return {
-      command: 'secret-tool',
-      args: ['lookup', 'service', SERVICE, 'account', account],
-      secretVia: 'stdin'
-    };
-  }
+  const attributes = ['service', SERVICE, 'account', account];
   return {
     command: 'secret-tool',
-    args: ['clear', 'service', SERVICE, 'account', account],
+    args: op === 'save' ? ['store', '--label', SERVICE, ...attributes] : ['lookup', ...attributes],
     secretVia: 'stdin'
   };
 }
@@ -130,7 +106,6 @@ export function createSecretStore(
 
   async function readKeychain(account: string): Promise<string | null> {
     const cmd = keychainCommand(platform, 'read', account);
-    if (!cmd) return null;
     try {
       const { code, stdout } = await run(cmd.command, cmd.args);
       if (code === 0 && stdout.trim().length > 0) return stdout.trim();
@@ -143,19 +118,17 @@ export function createSecretStore(
   return {
     async save(account, secret) {
       const cmd = keychainCommand(platform, 'save', account);
-      if (cmd) {
-        try {
-          const args = cmd.secretVia === 'argv' ? [...cmd.args, secret] : cmd.args;
-          const stdin = cmd.secretVia === 'stdin' ? secret : undefined;
-          const { code } = await run(cmd.command, args, stdin);
-          // Exit code 0 is not proof: an earlier version reported success while
-          // storing an empty string. Confirm by reading the value back.
-          if (code === 0 && (await readKeychain(account)) === secret) {
-            return 'the system keychain';
-          }
-        } catch {
-          // Fall through to the file.
+      try {
+        const args = cmd.secretVia === 'argv' ? [...cmd.args, secret] : cmd.args;
+        const stdin = cmd.secretVia === 'stdin' ? secret : undefined;
+        const { code } = await run(cmd.command, args, stdin);
+        // Exit code 0 is not proof: an earlier version reported success while
+        // storing an empty string. Confirm by reading the value back.
+        if (code === 0 && (await readKeychain(account)) === secret) {
+          return 'the system keychain';
         }
+      } catch {
+        // Fall through to the file.
       }
       const all = await readFallback();
       all[account] = secret;
@@ -169,21 +142,5 @@ export function createSecretStore(
       const all = await readFallback();
       return all[account] ?? null;
     },
-
-    async remove(account) {
-      const cmd = keychainCommand(platform, 'remove', account);
-      if (cmd) {
-        try {
-          await run(cmd.command, cmd.args);
-        } catch {
-          // Nothing to undo; the fallback is cleaned below regardless.
-        }
-      }
-      const all = await readFallback();
-      if (account in all) {
-        delete all[account];
-        await writeFallbackFile(all);
-      }
-    }
   };
 }

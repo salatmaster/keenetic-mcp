@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 const ROOT = new URL('../', import.meta.url);
 
-const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', 'coverage']);
+const SKIP_DIRS = new Set(['node_modules', 'dist', 'coverage']);
 // Working design docs are gitignored, so they never ship; published docs are
 // scanned like everything else.
 const SKIP_PATHS = ['docs/superpowers/'];
@@ -19,7 +19,7 @@ const ALLOWED_MACS = new Set(['aa:bb:cc:dd:ee:ff', '11:22:33:44:55:66']);
 //
 // The segment documentation needs a second and third subnet to show one being
 // created next to the home one. Those are listed individually rather than as a
-// range, the same way the MACs below are: a gateway .1 and a pool boundary
+// range, the same way the MACs above are: a gateway .1 and a pool boundary
 // identify nobody, while a client address out of a real router - the kind that
 // leaked here once - stays detectable. Writing one into this comment to explain
 // that is itself caught, which is the behaviour working.

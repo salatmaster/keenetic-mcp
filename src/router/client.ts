@@ -1,4 +1,4 @@
-import { fetchCapabilities, type Capabilities } from './capabilities.js';
+import { parseCapabilities, type Capabilities } from './capabilities.js';
 import { Rci } from './rci.js';
 import { Session, type SessionOptions } from './session.js';
 
@@ -16,7 +16,7 @@ export function createClient(opts: SessionOptions): KeeneticClient {
   return {
     rci,
     capabilities(): Promise<Capabilities> {
-      pending ??= fetchCapabilities(rci);
+      pending ??= rci.get('show/version').then(parseCapabilities);
       return pending;
     }
   };

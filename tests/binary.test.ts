@@ -57,6 +57,21 @@ const CONFIGURED: NodeJS.ProcessEnv = {
   KEENETIC_MCP_VERSION: ''
 };
 
+async function packageVersion(): Promise<string> {
+  const pkg = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8')) as {
+    version: string;
+  };
+  return pkg.version;
+}
+
+/** serverInfo from the first line the server wrote, the reply to initialize. */
+function serverInfo(stdout: string): { name?: string; version?: string } | undefined {
+  const response = JSON.parse(stdout.split('\n')[0] ?? '{}') as {
+    result?: { serverInfo?: { name?: string; version?: string } };
+  };
+  return response.result?.serverInfo;
+}
+
 /**
  * These run the built artefact, so `npm run build` must have happened. They
  * exist because everything else in the suite imports `createServer` directly
@@ -64,12 +79,6 @@ const CONFIGURED: NodeJS.ProcessEnv = {
  * 0.1.0 was broken.
  */
 describe('the built binary', () => {
-  it('answers initialize when run by its own path', async () => {
-    const result = await run(DIST, `${INITIALIZE}\n`, CONFIGURED);
-    expect(result.stdout).toContain('"serverInfo"');
-    expect(result.stdout).toContain('keenetic');
-  });
-
   // The version in the handshake is what a client displays and what a bug
   // report quotes, so it has to be the published one. It was a literal in
   // src/index.ts and sat at 0.1.0 while the package shipped 0.2.1. Run against
@@ -78,17 +87,10 @@ describe('the built binary', () => {
   // is the whole mechanism now, since the release workflow stamps the tag into
   // package.json and nothing else.
   it('reports the package version in serverInfo', async () => {
-    const pkg = JSON.parse(
-      await readFile(new URL('../package.json', import.meta.url), 'utf8')
-    ) as { version: string };
-
     const result = await run(DIST, `${INITIALIZE}\n`, CONFIGURED);
-    const response = JSON.parse(result.stdout.split('\n')[0] ?? '{}') as {
-      result?: { serverInfo?: { name?: string; version?: string } };
-    };
 
-    expect(response.result?.serverInfo?.name).toBe('keenetic');
-    expect(response.result?.serverInfo?.version).toBe(pkg.version);
+    expect(serverInfo(result.stdout)?.name).toBe('keenetic');
+    expect(serverInfo(result.stdout)?.version).toBe(await packageVersion());
   });
 
   // The escape hatch for reproducing a report against a version you are not
@@ -100,11 +102,8 @@ describe('the built binary', () => {
       ...CONFIGURED,
       KEENETIC_MCP_VERSION: '9.9.9-probe'
     });
-    const response = JSON.parse(result.stdout.split('\n')[0] ?? '{}') as {
-      result?: { serverInfo?: { version?: string } };
-    };
 
-    expect(response.result?.serverInfo?.version).toBe('9.9.9-probe');
+    expect(serverInfo(result.stdout)?.version).toBe('9.9.9-probe');
   });
 
   // Answered before the configuration is read, so it works on a machine that
@@ -113,13 +112,7 @@ describe('the built binary', () => {
     const result = await run(DIST, '', { KEENETIC_MCP_VERSION: '' }, ['--version']);
 
     expect(result.code).toBe(0);
-    expect(result.stdout.trim()).toBe(
-      (
-        JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8')) as {
-          version: string;
-        }
-      ).version
-    );
+    expect(result.stdout.trim()).toBe(await packageVersion());
   });
 
   // Regression: npm installs a bin as a symlink in node_modules/.bin, so under

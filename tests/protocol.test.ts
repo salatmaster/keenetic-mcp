@@ -4,7 +4,7 @@ import { InMemoryTransport } from '@modelcontextprotocol/server';
 import { createServer } from '../src/index.js';
 import type { ToolContext } from '../src/tools/registry.js';
 import type { KeeneticClient } from '../src/router/client.js';
-import { stubBackup } from './helpers/backup.js';
+import { testContext } from './helpers/tools.js';
 
 // backup_config is here because downloading the configuration changes nothing,
 // so it stays available even when writing is disabled.
@@ -45,7 +45,7 @@ function context(readOnly: boolean): ToolContext {
       features: new Set<string>()
     }))
   } as unknown as KeeneticClient;
-  return { client, backupName: '192.0.2.1', maxResponseBytes: 25_000, readOnly, backup: stubBackup() };
+  return testContext(client, { readOnly });
 }
 
 /** Speaks real MCP to the assembled server over a linked in-memory transport. */
@@ -60,14 +60,6 @@ async function connectedClient(readOnly = false): Promise<Client> {
 }
 
 describe('assembled server over MCP', () => {
-  it('advertises every read tool', async () => {
-    const client = await connectedClient();
-    const { tools } = await client.listTools();
-    for (const name of READ_TOOLS) {
-      expect(tools.map(t => t.name)).toContain(name);
-    }
-  });
-
   it('gives every tool a description a model can select on', async () => {
     const client = await connectedClient();
     const { tools } = await client.listTools();
@@ -123,12 +115,10 @@ describe('read-only mode', () => {
 });
 
 describe('write mode', () => {
-  it('advertises the write tools', async () => {
+  it('advertises the read and write tools and nothing else', async () => {
     const client = await connectedClient(false);
     const { tools } = await client.listTools();
-    for (const name of WRITE_TOOLS) {
-      expect(tools.map(t => t.name)).toContain(name);
-    }
+    expect(tools.map(t => t.name).sort()).toEqual([...READ_TOOLS, ...WRITE_TOOLS].sort());
   });
 
   it('marks every write tool destructive rather than read-only', async () => {

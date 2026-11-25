@@ -21,19 +21,16 @@ const NO_STORED_CONFIG: StoredConfig = { router: null, profiles: {} };
  */
 const PROFILE_NAME = /^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$/;
 
-export function checkProfileName(name: string): string {
+/** KEENETIC_PROFILE, else --profile, else none. */
+export function selectedProfile(argv: readonly string[], env: NodeJS.ProcessEnv): string | null {
+  const name = env['KEENETIC_PROFILE'] || flagValue(argv, '--profile');
+  if (!name) return null;
   if (!PROFILE_NAME.test(name)) {
     throw new Error(
       `Profile name "${name}" is not allowed: use up to 32 letters, digits, "-" and "_".`
     );
   }
   return name;
-}
-
-/** KEENETIC_PROFILE, else --profile, else none. */
-export function selectedProfile(argv: readonly string[], env: NodeJS.ProcessEnv): string | null {
-  const name = env['KEENETIC_PROFILE'] || flagValue(argv, '--profile');
-  return name ? checkProfileName(name) : null;
 }
 
 /**
@@ -104,9 +101,8 @@ export async function loadConfig(
   }
 
   if (!host) {
-    const profiles = Object.keys(stored.profiles);
     throw new Error(
-      profiles.length > 0
+      Object.keys(stored.profiles).length > 0
         ? `No router selected. ${knownProfiles(stored)} Choose one with KEENETIC_PROFILE ` +
             'or --profile, or run "npx keenetic-mcp init" to set up a default router.'
         : 'No router configured. Run "npx keenetic-mcp init" to set one up, or set ' +

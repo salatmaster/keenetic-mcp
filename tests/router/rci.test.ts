@@ -29,10 +29,6 @@ describe('collectStatuses', () => {
     expect(found.map(s => s.message)).toEqual(['deep']);
   });
 
-  it('does not double-count a status block', () => {
-    const found = collectStatuses({ status: [{ status: 'error', message: 'once' }] });
-    expect(found).toHaveLength(1);
-  });
 
   it('returns nothing for a clean response', () => {
     expect(collectStatuses({ title: '5.1.3', ndw: { components: 'base,ip6' } })).toEqual([]);

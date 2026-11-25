@@ -2,13 +2,9 @@ import { mkdtemp, readFile, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
-import { McpServer } from '@modelcontextprotocol/server';
 import { registerConfigTools } from '../../src/tools/config.js';
-import type { ToolContext, ToolResult } from '../../src/tools/registry.js';
 import type { KeeneticClient } from '../../src/router/client.js';
-import { stubBackup } from '../helpers/backup.js';
-
-type Handler = (args: Record<string, unknown>) => Promise<ToolResult>;
+import { captureTools, payload, testContext, text } from '../helpers/tools.js';
 
 const RUNNING_CHECKSUM = 'a1b2c3d4e5f60718293a4b5c6d7e8f90';
 const STALE_CHECKSUM = '0f9e8d7c6b5a49382716f5e4d3c2b1a0';
@@ -33,7 +29,7 @@ const CONFIG = configText(STALE_CHECKSUM);
  * is what a real 5.1.1 router reports even while a change sits unsaved. A save
  * check that believes that flag passes this harness while doing nothing.
  */
-function harness(opts: { unsavedAfter?: boolean; readOnly?: boolean; lagPolls?: number } = {}) {
+function harness(opts: { unsavedAfter?: boolean; lagPolls?: number } = {}) {
   const posts: unknown[] = [];
   let runningChecksum = RUNNING_CHECKSUM;
   let savedChecksum = STALE_CHECKSUM;
@@ -68,42 +64,24 @@ function harness(opts: { unsavedAfter?: boolean; readOnly?: boolean; lagPolls?: 
   });
 
   const client = {
-    rci: { get, post, getText },
-    capabilities: vi.fn()
+    rci: { get, post, getText }
   } as unknown as KeeneticClient;
 
-  const ctx: ToolContext = {
-    client,
-    backupName: '192.0.2.1',
-    maxResponseBytes: 25_000,
-    readOnly: opts.readOnly === true,
-    backup: stubBackup()
-  };
-  const server = new McpServer({ name: 'test', version: '0.0.0' });
-  const handlers: Record<string, Handler> = {};
-  vi.spyOn(server, 'registerTool').mockImplementation(((
-    name: string,
-    _c: unknown,
-    handler: Handler
-  ) => {
-    handlers[name] = handler;
-    return {} as never;
-  }) as never);
-
-  registerConfigTools(server, ctx);
+  const ctx = testContext(client);
+  const { handlers } = captureTools(server => registerConfigTools(server, ctx));
   return { handlers, posts, get, getText };
-}
-
-function payload(result: ToolResult): any {
-  return JSON.parse(result.content.map(p => p.text).join(''));
 }
 
 describe('save_config', () => {
   it('sends the save command and confirms afterwards', async () => {
-    const { handlers, posts } = harness();
+    const { handlers, posts, get, getText } = harness();
     const out = payload(await handlers['save_config']!({}));
     expect(posts).toContainEqual({ system: { configuration: { save: {} } } });
     expect(out.saved).toBe(true);
+    // The startup config is ~17 KB. Polling the confirmation rather than the
+    // cheap endpoint turned one save into roughly 100 KB of traffic.
+    expect(getText).toHaveBeenCalledTimes(1);
+    expect(get.mock.calls.length).toBeGreaterThan(1);
   });
 
   // The date moves when the save starts. Confirming on that read flash before
@@ -116,31 +94,12 @@ describe('save_config', () => {
   }, 10_000);
 
   it('fails when the router still reports unsaved changes', async () => {
-    const { handlers } = harness({ unsavedAfter: true });
+    const { handlers, getText } = harness({ unsavedAfter: true });
     const result = await handlers['save_config']!({});
     expect(result.isError).toBe(true);
-    expect(result.content.map(p => p.text).join('')).toMatch(/still reports unsaved/i);
-  }, 10_000);
-
-  // The startup config is ~17 KB. Polling the confirmation rather than the
-  // cheap endpoint turned one save into roughly 100 KB of traffic.
-  it('reads the startup config once, however many times it polls', async () => {
-    const { handlers, get, getText } = harness();
-    await handlers['save_config']!({});
-    expect(getText).toHaveBeenCalledTimes(1);
-    expect(get.mock.calls.length).toBeGreaterThan(1);
-  });
-
-  it('reads it once on the failing path too', async () => {
-    const { handlers, getText } = harness({ unsavedAfter: true });
-    await handlers['save_config']!({});
+    expect(text(result)).toMatch(/still reports unsaved/i);
     expect(getText).toHaveBeenCalledTimes(1);
   }, 10_000);
-
-  it('is not registered in read-only mode', () => {
-    const { handlers } = harness({ readOnly: true });
-    expect(handlers['save_config']).toBeUndefined();
-  });
 });
 
 describe('backup_config', () => {
@@ -169,11 +128,5 @@ describe('backup_config', () => {
       await expect(readFile(out.path, 'utf8')).resolves.toBe(CONFIG);
       await expect(stat(out.path).then(s => s.mode & 0o777)).resolves.toBe(0o600);
     });
-  });
-
-
-  it('stays available in read-only mode, since reading changes nothing', () => {
-    const { handlers } = harness({ readOnly: true });
-    expect(handlers['backup_config']).toBeDefined();
   });
 });

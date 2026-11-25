@@ -1,10 +1,8 @@
 import type { McpServer } from '@modelcontextprotocol/server';
 import * as z from 'zod/v4';
-import { fail, guard, ok, type ToolContext, type ToolResult } from './registry.js';
+import { fail, guard, ok, READ_ONLY, type ToolContext, type ToolResult } from './registry.js';
 
 type RawBody = string | Record<string, unknown> | unknown[];
-
-type Decoded = { ok: true; body: unknown } | { ok: false; message: string };
 
 /**
  * Accepts a body that arrived as text and turns it back into a command tree.
@@ -17,33 +15,30 @@ type Decoded = { ok: true; body: unknown } | { ok: false; message: string };
  * server exists to prevent everywhere else.
  *
  * Decoding keeps those callers working. Anything that still is not a command
- * tree afterwards is refused rather than sent.
+ * tree afterwards is refused rather than sent: the throw reaches the model
+ * through guard().
  */
-function decodeBody(body: RawBody): Decoded {
-  if (typeof body !== 'string') return { ok: true, body };
+function decodeBody(body: RawBody): unknown {
+  if (typeof body !== 'string') return body;
 
   let parsed: unknown;
   try {
     parsed = JSON.parse(body);
   } catch {
-    return {
-      ok: false,
-      message:
-        `The body is a string that is not JSON: ${body.slice(0, 60)}. Send the command as ` +
+    throw new Error(
+      `The body is a string that is not JSON: ${body.slice(0, 60)}. Send the command as ` +
         'JSON, for example {"show": {"version": {}}}.'
-    };
+    );
   }
 
   if (typeof parsed !== 'object' || parsed === null) {
-    return {
-      ok: false,
-      message:
-        `The body decoded to a ${typeof parsed}, not a command tree. Send an object such as ` +
+    throw new Error(
+      `The body decoded to a ${typeof parsed}, not a command tree. Send an object such as ` +
         '{"show": {"version": {}}}, or an array of them for a batch.'
-    };
+    );
   }
 
-  return { ok: true, body: parsed };
+  return parsed;
 }
 
 export function registerRawTool(server: McpServer, ctx: ToolContext): void {
@@ -81,16 +76,15 @@ export function registerRawTool(server: McpServer, ctx: ToolContext): void {
       // In read-only mode POST is refused, so the tool genuinely cannot modify
       // anything and the annotation says so rather than overstating the risk.
       annotations: ctx.readOnly
-        ? { readOnlyHint: true, openWorldHint: false }
+        ? READ_ONLY
         : { readOnlyHint: false, destructiveHint: true, openWorldHint: false }
     },
     guard(async ({ method, path, body, max_bytes }): Promise<ToolResult> => {
-      let payload: unknown;
+      let result: unknown;
 
       if (method === 'GET') {
-        if (path === undefined || path.length === 0) {
-          return fail(new Error('GET needs a path, for example "show/version".'));
-        }
+        if (!path) return fail(new Error('GET needs a path, for example "show/version".'));
+        result = await ctx.client.rci.get(path);
       } else {
         if (ctx.readOnly) {
           return fail(
@@ -103,13 +97,8 @@ export function registerRawTool(server: McpServer, ctx: ToolContext): void {
         if (body === undefined) {
           return fail(new Error('POST needs a body, for example {"show": {"version": {}}}.'));
         }
-        const decoded = decodeBody(body);
-        if (!decoded.ok) return fail(new Error(decoded.message));
-        payload = decoded.body;
+        result = await ctx.client.rci.post(decodeBody(body));
       }
-
-      const result =
-        method === 'GET' ? await ctx.client.rci.get(path as string) : await ctx.client.rci.post(payload);
 
       // max_bytes may only tighten the ceiling: a tool argument must not be able
       // to overrun the budget the operator configured with --max-response-bytes.

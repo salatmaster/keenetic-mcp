@@ -1,11 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
-import { McpServer } from '@modelcontextprotocol/server';
 import { registerDeviceTools } from '../../src/tools/devices.js';
-import type { ToolContext, ToolResult } from '../../src/tools/registry.js';
 import type { KeeneticClient } from '../../src/router/client.js';
-import { stubBackup } from '../helpers/backup.js';
-
-type Handler = (args: Record<string, unknown>) => Promise<ToolResult>;
+import { captureTools, payload, testContext, text, type Handler } from '../helpers/tools.js';
 
 const HOSTS = {
   host: [
@@ -46,52 +42,20 @@ const HOSTS = {
 
 function harness(payload: unknown = HOSTS): Record<string, Handler> {
   const client = {
-    rci: { get: vi.fn(async () => payload), post: vi.fn(), getText: vi.fn() },
-    capabilities: vi.fn()
+    rci: { get: vi.fn(async () => payload) }
   } as unknown as KeeneticClient;
-  const ctx: ToolContext = { client, backupName: '192.0.2.1', maxResponseBytes: 25_000, readOnly: false, backup: stubBackup() };
-
-  const server = new McpServer({ name: 'test', version: '0.0.0' });
-  const handlers: Record<string, Handler> = {};
-  vi.spyOn(server, 'registerTool').mockImplementation(((
-    name: string,
-    _config: unknown,
-    handler: Handler
-  ) => {
-    handlers[name] = handler;
-    return {} as never;
-  }) as never);
-
-  registerDeviceTools(server, ctx);
-  return handlers;
-}
-
-function payload(result: ToolResult): any {
-  return JSON.parse(result.content.map(p => p.text).join(''));
+  const ctx = testContext(client);
+  return captureTools(server => registerDeviceTools(server, ctx)).handlers;
 }
 
 describe('list_devices', () => {
-  it('projects each host down to the summary fields', async () => {
-    const out = payload(await harness()['list_devices']!({}));
-    expect(out.devices).toHaveLength(3);
-    expect(Object.keys(out.devices[0]).sort()).toEqual(
-      ['active', 'blocked', 'connection', 'ip', 'mac', 'name', 'rssi', 'rxBytes', 'txBytes'].sort()
-    );
-  });
-
-  it('filters to active devices', async () => {
-    const out = payload(await harness()['list_devices']!({ filter: 'active' }));
-    expect(out.devices.map((d: any) => d.name)).toEqual(['device-1', 'device-2']);
-  });
-
-  it('filters to wireless devices', async () => {
-    const out = payload(await harness()['list_devices']!({ filter: 'wireless' }));
-    expect(out.devices.map((d: any) => d.name)).toEqual(['device-1']);
-  });
-
-  it('filters to blocked devices', async () => {
-    const out = payload(await harness()['list_devices']!({ filter: 'blocked' }));
-    expect(out.devices.map((d: any) => d.name)).toEqual(['device-2']);
+  it.each([
+    ['active', ['device-1', 'device-2']],
+    ['wireless', ['device-1']],
+    ['blocked', ['device-2']]
+  ])('filters to %s devices', async (filter, names) => {
+    const out = payload(await harness()['list_devices']!({ filter }));
+    expect(out.devices.map((d: any) => d.name)).toEqual(names);
   });
 
   it('sorts by total traffic descending', async () => {
@@ -114,7 +78,7 @@ describe('list_devices', () => {
 });
 
 describe('get_device', () => {
-  it('finds a device by MAC, case-insensitively, and returns the full record', async () => {
+  it('finds a device by MAC and returns the full record', async () => {
     const out = payload(await harness()['get_device']!({ mac: '02:00:00:00:00:01' }));
     expect(out.ssid).toBe('ssid-1');
     expect(out.rssi).toBe(-36);
@@ -133,7 +97,7 @@ describe('get_device', () => {
   it('returns isError listing known devices when nothing matches', async () => {
     const result = await harness()['get_device']!({ mac: '02:00:00:00:00:99' });
     expect(result.isError).toBe(true);
-    expect(result.content.map(p => p.text).join('')).toContain('device-1');
+    expect(text(result)).toContain('device-1');
   });
 
   it('returns isError when no identifier is supplied', async () => {

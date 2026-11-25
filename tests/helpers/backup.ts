@@ -10,7 +10,6 @@ export const STUB_SNAPSHOT: BackupResult = {
 /** A backup guard that records calls without touching the filesystem. */
 export function stubBackup(): BackupGuard {
   return {
-    ensure: vi.fn(async () => STUB_SNAPSHOT),
-    taken: () => null
+    ensure: vi.fn(async () => STUB_SNAPSHOT)
   };
 }

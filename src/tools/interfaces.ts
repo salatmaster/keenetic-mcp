@@ -4,6 +4,7 @@ import { capList } from '../shape/budget.js';
 import { projectInterface } from '../shape/project.js';
 import { fail, guard, ok, READ_ONLY, type ToolContext, type ToolResult } from './registry.js';
 import { describeWrite, verifiedWrite } from './write.js';
+import { asRecord, str } from '../shape/record.js';
 
 type InterfaceKind = 'all' | 'wan' | 'lan' | 'wifi' | 'vpn' | 'bridge';
 
@@ -17,18 +18,13 @@ type InterfaceKind = 'all' | 'wan' | 'lan' | 'wifi' | 'vpn' | 'bridge';
  */
 async function readInterface(ctx: ToolContext, name: string): Promise<Record<string, unknown>> {
   const raw = await ctx.client.rci.post({ show: { interface: { name } } });
-  const outer = typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : {};
-  const show = typeof outer['show'] === 'object' && outer['show'] !== null
-    ? (outer['show'] as Record<string, unknown>)
-    : {};
-  const record = show['interface'];
-  return typeof record === 'object' && record !== null ? (record as Record<string, unknown>) : {};
+  return asRecord(asRecord(asRecord(raw)['show'])['interface']);
 }
 
 const VPN_TYPES = new Set(['Wireguard', 'OpenVPN', 'L2TP', 'PPTP', 'IPsec', 'Sstp']);
 
 function matchesKind(id: string, record: Record<string, unknown>, kind: InterfaceKind): boolean {
-  const type = typeof record['type'] === 'string' ? record['type'] : '';
+  const type = str(record, 'type');
   switch (kind) {
     case 'wan':
       return record['role'] === 'inet' || record['defaultgw'] === true;
@@ -69,14 +65,8 @@ export function registerInterfaceTools(server: McpServer, ctx: ToolContext): voi
     },
     guard(async ({ kind, detail, limit }) => {
       const raw = await ctx.client.rci.get('show/interface');
-      const all = typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : {};
-
-      const selected = Object.entries(all).filter(([id, record]) =>
-        matchesKind(
-          id,
-          typeof record === 'object' && record !== null ? (record as Record<string, unknown>) : {},
-          kind ?? 'all'
-        )
+      const selected = Object.entries(asRecord(raw)).filter(([id, record]) =>
+        matchesKind(id, asRecord(record), kind ?? 'all')
       );
 
       const shaped =
@@ -84,13 +74,9 @@ export function registerInterfaceTools(server: McpServer, ctx: ToolContext): voi
           ? selected.map(([id, record]) => ({ id, ...(record as Record<string, unknown>) }))
           : selected.map(([id, record]) => projectInterface(id, record));
 
-      const capped = capList(shaped, limit ?? 100, ctx.maxResponseBytes);
-      return ok({
-        interfaces: capped.items,
-        shown: capped.shown,
-        total: capped.total,
-        ...(capped.note ? { note: capped.note } : {})
-      });
+      // JSON.stringify leaves `note` out when there is none.
+      const { items, shown, total, note } = capList(shaped, limit ?? 100, ctx.maxResponseBytes);
+      return ok({ interfaces: items, shown, total, note });
     })
   );
 
@@ -139,10 +125,7 @@ export function registerInterfaceTools(server: McpServer, ctx: ToolContext): voi
     },
     guard(async ({ name, state }): Promise<ToolResult> => {
       const snapshot = await ctx.backup.ensure();
-      const body =
-        state === 'up'
-          ? { interface: { [name]: { up: true } } }
-          : { interface: { [name]: { up: { no: true } } } };
+      const body = { interface: { [name]: { up: state === 'up' ? true : { no: true } } } };
 
       await verifiedWrite({
         apply: () => ctx.client.rci.post(body),

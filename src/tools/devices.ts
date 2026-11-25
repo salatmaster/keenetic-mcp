@@ -4,25 +4,27 @@ import { capList } from '../shape/budget.js';
 import { projectDevice } from '../shape/project.js';
 import { fail, guard, ok, READ_ONLY, type ToolContext, type ToolResult } from './registry.js';
 import { describeWrite, verifiedWrite } from './write.js';
+import { asRecord } from '../shape/record.js';
 
 type HostRecord = Record<string, unknown>;
 
+/** Matches a host row by MAC, ignoring case. */
+function sameMac(mac: string): (row: HostRecord) => boolean {
+  const wanted = mac.toLowerCase();
+  return row => typeof row['mac'] === 'string' && row['mac'].toLowerCase() === wanted;
+}
+
 async function fetchHosts(ctx: ToolContext): Promise<HostRecord[]> {
   const raw = await ctx.client.rci.get('show/ip/hotspot');
-  const container = typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : {};
-  const hosts = container['host'];
+  const hosts = asRecord(raw)['host'];
   return Array.isArray(hosts) ? (hosts as HostRecord[]) : [];
 }
 
-/** Reads one row out of a config branch that stores hosts as a MAC-keyed array. */
-async function branchEntry(
-  ctx: ToolContext,
-  path: 'ip/hotspot/host' | 'known/host',
-  mac: string
-): Promise<HostRecord | undefined> {
-  const raw = await ctx.client.rci.get(path);
+/** Reads one host out of the ip/hotspot/host config branch, a MAC-keyed array. */
+async function hotspotEntry(ctx: ToolContext, mac: string): Promise<HostRecord | undefined> {
+  const raw = await ctx.client.rci.get('ip/hotspot/host');
   const rows = Array.isArray(raw) ? (raw as HostRecord[]) : [];
-  return rows.find(row => String(row['mac']).toLowerCase() === mac.toLowerCase());
+  return rows.find(sameMac(mac));
 }
 
 /**
@@ -34,8 +36,7 @@ async function branchEntry(
  * that made an earlier version report every rename as failed.
  */
 async function operationalHost(ctx: ToolContext, mac: string): Promise<HostRecord | undefined> {
-  const hosts = await fetchHosts(ctx);
-  return hosts.find(row => String(row['mac']).toLowerCase() === mac.toLowerCase());
+  return (await fetchHosts(ctx)).find(sameMac(mac));
 }
 
 export function registerDeviceTools(server: McpServer, ctx: ToolContext): void {
@@ -96,13 +97,9 @@ export function registerDeviceTools(server: McpServer, ctx: ToolContext): void {
           break;
       }
 
-      const capped = capList(devices, limit ?? 50, ctx.maxResponseBytes);
-      return ok({
-        devices: capped.items,
-        shown: capped.shown,
-        total: capped.total,
-        ...(capped.note ? { note: capped.note } : {})
-      });
+      // JSON.stringify leaves `note` out when there is none.
+      const { items, shown, total, note } = capList(devices, limit ?? 50, ctx.maxResponseBytes);
+      return ok({ devices: items, shown, total, note });
     })
   );
 
@@ -126,17 +123,15 @@ export function registerDeviceTools(server: McpServer, ctx: ToolContext): void {
       }
 
       const hosts = await fetchHosts(ctx);
-      const wanted = mac?.toLowerCase();
       const match = hosts.find(host => {
-        const hostMac = typeof host['mac'] === 'string' ? host['mac'].toLowerCase() : '';
-        if (wanted && hostMac === wanted) return true;
+        if (mac && sameMac(mac)(host)) return true;
         if (ip && host['ip'] === ip) return true;
         if (name && (host['name'] === name || host['hostname'] === name)) return true;
         return false;
       });
 
       if (!match) {
-        const known = hosts.map(h => String(h['name'] ?? h['hostname'] ?? h['mac'])).join(', ');
+        const known = hosts.map(h => projectDevice(h).name).join(', ');
         return fail(
           new Error(
             `No device matched. Known devices: ${known || 'none'}. ` +
@@ -200,13 +195,10 @@ export function registerDeviceTools(server: McpServer, ctx: ToolContext): void {
       }
 
       if (access !== undefined) {
-        const body =
-          access === 'deny'
-            ? { ip: { hotspot: { host: { mac, deny: true } } } }
-            : { ip: { hotspot: { host: { mac, permit: true } } } };
+        const body = { ip: { hotspot: { host: { mac, [access]: true } } } };
         await verifiedWrite({
           apply: () => ctx.client.rci.post(body),
-          readBack: () => branchEntry(ctx, 'ip/hotspot/host', mac),
+          readBack: () => hotspotEntry(ctx, mac),
           check: row => row?.['access'] === access,
           what: `access=${access}`
         });
@@ -221,7 +213,7 @@ export function registerDeviceTools(server: McpServer, ctx: ToolContext): void {
         if (value === undefined) continue;
         await verifiedWrite({
           apply: () => ctx.client.rci.post({ ip: { hotspot: { host: { mac, [field]: value } } } }),
-          readBack: () => branchEntry(ctx, 'ip/hotspot/host', mac),
+          readBack: () => hotspotEntry(ctx, mac),
           check: row => row?.[field] === value,
           what: `${field}=${String(value)}`
         });

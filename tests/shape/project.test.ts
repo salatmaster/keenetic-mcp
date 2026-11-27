@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { projectDevice, projectInterface } from '../../src/shape/project.js';
+import { addressScope, projectDevice, projectInterface } from '../../src/shape/project.js';
 
 const WIRELESS_HOST = {
   mac: '02:00:00:00:00:01',
@@ -85,8 +85,16 @@ describe('projectInterface', () => {
       link: 'up',
       state: 'up',
       address: '198.51.100.8',
-      defaultGateway: true
+      defaultGateway: true,
+      addressScope: 'public'
     });
+  });
+
+  it('gives a WireGuard tunnel with one peer that peer as the likely exit', () => {
+    const peer = { 'remote-endpoint-address': '203.0.113.20' };
+    expect(projectInterface('Wireguard3', { wireguard: { peer: [peer] } }).likelyExit).toBe('203.0.113.20');
+    // Several peers: the router is the server and the endpoints are its clients.
+    expect(projectInterface('Wireguard4', { wireguard: { peer: [peer, peer] } }).likelyExit).toBeUndefined();
   });
 
   it('defaults missing fields to empty values rather than undefined', () => {
@@ -99,5 +107,28 @@ describe('projectInterface', () => {
       address: '',
       defaultGateway: false
     });
+  });
+});
+
+describe('addressScope', () => {
+  it.each([
+    ['10.0.0.42', 'private'],
+    ['172.16.0.1', 'private'],
+    ['172.15.0.1', 'public'],
+    ['192.168.1.1', 'private'],
+    ['169.254.0.5', 'private'],
+    ['100.64.0.1', 'cgnat'],
+    ['100.127.255.254', 'cgnat'],
+    ['100.128.0.1', 'public'],
+    ['172.32.0.1', 'public'],
+    ['203.0.113.9', 'public']
+  ])('classifies %s as %s', (address, scope) => {
+    expect(addressScope(address)).toBe(scope);
+  });
+
+  it('has no scope for an empty or non-IPv4 address', () => {
+    expect(addressScope('')).toBeUndefined();
+    expect(addressScope('2001:db8::1')).toBeUndefined();
+    expect(addressScope('1.2.3.256')).toBeUndefined();
   });
 });

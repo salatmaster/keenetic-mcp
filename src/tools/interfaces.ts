@@ -1,7 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/server';
 import * as z from 'zod/v4';
 import { capList } from '../shape/budget.js';
-import { projectInterface } from '../shape/project.js';
+import { addressScope, likelyExit, projectInterface } from '../shape/project.js';
 import { fail, guard, ok, READ_ONLY, type ToolContext, type ToolResult } from './registry.js';
 import { describeWrite, verifiedWrite } from './write.js';
 import { asRecord, str } from '../shape/record.js';
@@ -20,6 +20,14 @@ async function readInterface(ctx: ToolContext, name: string): Promise<Record<str
   const raw = await ctx.client.rci.post({ show: { interface: { name } } });
   return asRecord(asRecord(asRecord(raw)['show'])['interface']);
 }
+
+// The router cannot fetch a URL through a chosen interface, so this is as close
+// to "the external IP of this link" as it gets without changing the configuration.
+const EXIT_FIELDS =
+  'addressScope says whether the address is public, private or CGNAT (100.64.0.0/10): ' +
+  'a public address on a WAN link is its external IP, a private or CGNAT one means the ' +
+  'external IP is not visible from the router. likelyExit is the endpoint of a WireGuard ' +
+  'tunnel with one peer; many VPN providers exit from it, but not all, so treat it as a hint.';
 
 const VPN_TYPES = new Set(['Wireguard', 'OpenVPN', 'L2TP', 'PPTP', 'IPsec', 'Sstp']);
 
@@ -49,7 +57,8 @@ export function registerInterfaceTools(server: McpServer, ctx: ToolContext): voi
       description:
         'Every interface on the router - WAN links, bridges, Wi-Fi access points and VPN ' +
         'tunnels - with link state, address and whether it carries the default route. ' +
-        'Summary detail is the default because the full listing is very large.',
+        EXIT_FIELDS +
+        ' Summary detail is the default because the full listing is very large.',
       inputSchema: {
         kind: z
           .enum(['all', 'wan', 'lan', 'wifi', 'vpn', 'bridge'])
@@ -86,7 +95,8 @@ export function registerInterfaceTools(server: McpServer, ctx: ToolContext): voi
       title: 'Get one interface in full',
       description:
         'Every field for a single interface, including protocol-specific detail such as ' +
-        'WireGuard peers or PPPoE session state. Get the exact name from list_interfaces first.',
+        'WireGuard peers or PPPoE session state. Get the exact name from list_interfaces first. ' +
+        EXIT_FIELDS,
       inputSchema: {
         name: z.string().describe('Interface id, for example Bridge0 or Wireguard3.')
       },
@@ -94,7 +104,12 @@ export function registerInterfaceTools(server: McpServer, ctx: ToolContext): voi
     },
     guard(async ({ name }): Promise<ToolResult> => {
       try {
-        return ok(await readInterface(ctx, name));
+        const record = await readInterface(ctx, name);
+        return ok({
+          ...record,
+          addressScope: addressScope(str(record, 'address')),
+          likelyExit: likelyExit(record)
+        });
       } catch (error) {
         return fail(
           new Error(

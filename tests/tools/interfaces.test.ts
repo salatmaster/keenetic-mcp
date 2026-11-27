@@ -36,7 +36,7 @@ const INTERFACES = {
     state: 'up',
     address: '198.51.100.8',
     defaultgw: true,
-    wireguard: { 'public-key': '<redacted>' }
+    wireguard: { 'public-key': '<redacted>', peer: [{ 'remote-endpoint-address': '203.0.113.20' }] }
   }
 };
 
@@ -61,7 +61,7 @@ describe('list_interfaces', () => {
   it('returns summary fields only by default', async () => {
     const out = payload(await harness().handlers['list_interfaces']!({}));
     expect(Object.keys(out.interfaces[0]).sort()).toEqual(
-      ['address', 'defaultGateway', 'description', 'id', 'link', 'state', 'type'].sort()
+      ['address', 'addressScope', 'defaultGateway', 'description', 'id', 'link', 'state', 'type'].sort()
     );
     expect(out.total).toBe(4);
   });
@@ -93,6 +93,12 @@ describe('get_interface', () => {
       show: { interface: { name: 'WifiMaster0/AccessPoint0' } }
     });
     expect(out.id).toBe('WifiMaster0/AccessPoint0');
+  });
+
+  it('adds the address scope and the likely exit to the raw record', async () => {
+    const out = payload(await harness().handlers['get_interface']!({ name: 'Wireguard3' }));
+    expect(out).toMatchObject({ addressScope: 'public', likelyExit: '203.0.113.20' });
+    expect(out.wireguard.peer).toHaveLength(1);
   });
 
   it('returns isError with a usable hint when the interface does not exist', async () => {

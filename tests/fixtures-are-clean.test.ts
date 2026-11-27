@@ -27,6 +27,8 @@ const PRIVATE_IP = /\b(10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[0
 const ALLOWED_IPS = new Set([
   '192.168.1.1',
   '10.0.0.42',
+  // The low edge of the 172 private block, for the address scope test.
+  '172.16.0.1',
   '192.168.1.50',
   '192.168.2.1',
   '192.168.2.50',
